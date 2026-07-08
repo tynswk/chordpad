@@ -1,8 +1,63 @@
 .app {
+  width: 100%;
   max-width: 960px;
   margin: 0 auto;
   padding: 24px 16px 64px;
   text-align: left;
+  box-sizing: border-box;
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tablet/desktop: use the full width instead of one long scrolling column --
+   a fixed-width sidebar of controls next to a pad grid that fills the rest. */
+@media (min-width: 700px) {
+  .app {
+    max-width: 1400px;
+    box-sizing: border-box;
+  }
+
+  .layout {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 32px;
+  }
+
+  .layout-sidebar {
+    flex: 0 0 380px;
+  }
+
+  .layout-main {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+  }
+
+  .layout-main .pad-section {
+    width: 100%;
+    max-width: 720px;
+  }
+
+  .layout-main .pad-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .layout-main .pad {
+    aspect-ratio: 1;
+  }
+}
+
+/* Tall viewports (tablets in landscape especially): let the pad grid grow
+   into the extra vertical space instead of sitting small at the top. */
+@media (min-width: 700px) and (min-height: 700px) {
+  .layout-main {
+    align-items: center;
+    min-height: calc(100dvh - 48px);
+  }
 }
 
 .header {

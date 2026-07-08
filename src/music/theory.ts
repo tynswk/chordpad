@@ -124,6 +124,12 @@ export function chordToMidiNotes(chord: ChordDef): number[] {
   return QUALITY_INTERVALS[chord.quality].map((interval) => rootMidi + interval);
 }
 
+/** The chord's pitch classes (0-11), independent of octave. */
+export function chordPitchClasses(chord: ChordDef): Set<number> {
+  const rootIndex = NOTE_NAMES.indexOf(chord.root);
+  return new Set(QUALITY_INTERVALS[chord.quality].map((interval) => (rootIndex + interval) % 12));
+}
+
 /**
  * Determines the functional-harmony label for an arbitrary chord relative to
  * the current scale, by matching root+quality against the diatonic set.

@@ -1,8 +1,10 @@
 import { createCabinetImpulseResponse } from "./cabinet";
 import { distortionMakeupGain, makeDistortionCurve } from "./distortion";
 import { pluckKarplusString, preloadKarplusStrongWorklet } from "./karplusStrong";
+import { voiceForGuitar, voiceForPiano } from "./voicing";
 import type { PlaybackSettings, StrokePattern, Timbre } from "../state/types";
 import { STROKE_PRESETS } from "../state/types";
+import type { ChordDef } from "../music/theory";
 
 let audioContext: AudioContext | null = null;
 let cabinetIR: AudioBuffer | null = null;
@@ -130,19 +132,25 @@ function playNote(
   osc.stop(startTime + releaseEnd + 0.05);
 }
 
+/** Voices the chord appropriately for the instrument: real guitar-style
+ * fretboard spread for guitar, wide bass+treble-doubled spread for piano. */
+function voiceChord(chord: ChordDef, timbre: Timbre): number[] {
+  return timbre.type === "guitar" ? voiceForGuitar(chord) : voiceForPiano(chord);
+}
+
 /** Plays a full chord as a single block at "now" through the given timbre. */
-export function playChordBlock(midiNotes: number[], timbre: Timbre): void {
+export function playChordBlock(chord: ChordDef, timbre: Timbre): void {
   const ctx = getAudioContext();
   const destination = buildTimbreChain(ctx, timbre);
   const startTime = ctx.currentTime + 0.01;
-  for (const note of midiNotes) {
+  for (const note of voiceChord(chord, timbre)) {
     playNote(ctx, destination, midiToFrequency(note), startTime, timbre.type, 1);
   }
 }
 
 /** Plays a chord following a strum pattern, timed against the given BPM. */
 export function playChordStrum(
-  midiNotes: number[],
+  chord: ChordDef,
   timbre: Timbre,
   playback: PlaybackSettings,
 ): void {
@@ -154,7 +162,7 @@ export function playChordStrum(
   const baseTime = ctx.currentTime + 0.01;
   const strumSpreadMs = 10; // delay between adjacent strings within one strum
 
-  const sortedNotes = [...midiNotes].sort((a, b) => a - b);
+  const sortedNotes = voiceChord(chord, timbre).sort((a, b) => a - b);
 
   for (const step of pattern.steps) {
     const stepTime = baseTime + step.beat * secondsPerBeat;
@@ -167,10 +175,10 @@ export function playChordStrum(
 }
 
 /** Plays a pad according to the current playback mode (block or strum). */
-export function playPad(midiNotes: number[], timbre: Timbre, playback: PlaybackSettings): void {
+export function playPad(chord: ChordDef, timbre: Timbre, playback: PlaybackSettings): void {
   if (playback.mode === "strum") {
-    playChordStrum(midiNotes, timbre, playback);
+    playChordStrum(chord, timbre, playback);
   } else {
-    playChordBlock(midiNotes, timbre);
+    playChordBlock(chord, timbre);
   }
 }

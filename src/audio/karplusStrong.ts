@@ -22,13 +22,21 @@ export function preloadKarplusStrongWorklet(ctx: AudioContext): void {
   void loadWorkletModule(ctx);
 }
 
-/** Thicker/lower strings are damped less (ring out longer), like a real guitar. */
+/**
+ * Thicker/lower strings are damped less (ring out longer), like a real guitar.
+ * Because decay time = periodsToDecay / frequency, even a small damping delta
+ * compounds a lot at higher pitches -- so the band here intentionally matches
+ * ../ChordTraining's real per-string range (0.9945-0.997, low E to high e)
+ * rather than a wider one, which was cutting high notes off in well under a
+ * second.
+ */
 function dampingForFrequency(frequency: number): number {
-  const t = Math.min(1, Math.max(0, Math.log2(frequency / 82.41) / Math.log2(1000 / 82.41)));
-  return 0.997 - t * 0.006;
+  const t = Math.min(1, Math.max(0, Math.log2(frequency / 82.41) / Math.log2(659.25 / 82.41)));
+  return 0.997 - t * 0.0025;
 }
 
-const VOICE_LIFETIME_MS = 8000;
+const VOICE_LIFETIME_MS = 12000;
+const FADE_OUT_MS = 120;
 
 /** Plucks a one-shot Karplus-Strong string voice, routed into `destination`. */
 export async function pluckKarplusString(
@@ -70,6 +78,14 @@ export async function pluckKarplusString(
   };
   if (delayMs <= 1) fire();
   else setTimeout(fire, delayMs);
+
+  // Fade out just before cleanup so a still-ringing low string doesn't click off.
+  const fadeStart = delayMs + VOICE_LIFETIME_MS - FADE_OUT_MS;
+  setTimeout(() => {
+    const t = ctx.currentTime;
+    voiceGain.gain.setValueAtTime(voiceGain.gain.value, t);
+    voiceGain.gain.linearRampToValueAtTime(0, t + FADE_OUT_MS / 1000);
+  }, Math.max(0, fadeStart));
 
   setTimeout(() => {
     node.port.postMessage({ type: "mute" });
