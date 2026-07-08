@@ -8,7 +8,7 @@
   --accent-bg: rgba(47, 125, 225, 0.1);
   --accent-border: rgba(47, 125, 225, 0.45);
   --social-bg: rgba(227, 236, 247, 0.5);
-  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg: rgba(255, 255, 255, 0.2);
   --glass-border: rgba(255, 255, 255, 0.6);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
@@ -43,7 +43,7 @@
     --accent-bg: rgba(91, 157, 242, 0.16);
     --accent-border: rgba(91, 157, 242, 0.45);
     --social-bg: rgba(20, 34, 53, 0.5);
-    --glass-bg: rgba(20, 34, 53, 0.5);
+    --glass-bg: rgba(20, 34, 53, 0.2);
     --glass-border: rgba(91, 157, 242, 0.18);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
@@ -64,7 +64,7 @@
   --accent-bg: rgba(91, 157, 242, 0.16);
   --accent-border: rgba(91, 157, 242, 0.45);
   --social-bg: rgba(20, 34, 53, 0.5);
-  --glass-bg: rgba(20, 34, 53, 0.5);
+  --glass-bg: rgba(20, 34, 53, 0.2);
   --glass-border: rgba(91, 157, 242, 0.18);
   --shadow:
     rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
