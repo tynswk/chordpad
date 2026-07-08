@@ -33,44 +33,12 @@
     padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px));
   }
 
-  .pad-panel-bar {
-    display: block;
-    width: 100%;
-    border: none;
-    background: transparent;
-    color: inherit;
-    font-family: inherit;
-    cursor: pointer;
-    padding: 0;
-    /* Must fully own vertical drags itself (swipe-to-open/close) -- with
-       "manipulation" the browser still claims the gesture for scrolling and
-       our pointerup handler never sees where the swipe ended. */
-    touch-action: none;
-  }
-
   .pad-panel-grip {
     display: block;
-    width: 36px;
+    width: 30px;
     height: 4px;
     border-radius: 999px;
     background: var(--border);
-    margin: 2px auto 10px;
-  }
-
-  .pad-panel-bar-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .pad-panel-title {
-    font-weight: 700;
-    font-size: 15px;
-    color: var(--text-h);
-  }
-
-  .pad-panel-bar-row {
-    color: var(--accent);
   }
 
   .pad-panel-body {
@@ -103,16 +71,6 @@
     margin-top: 0;
     overflow: hidden;
     pointer-events: none;
-  }
-
-  /* The bar already shows the "Pads" title, so drop the duplicate heading
-     inside the body and let the edit/clear actions take that space. */
-  .pad-panel-body .pad-section-header h2 {
-    display: none;
-  }
-
-  .pad-panel-body .pad-section-header {
-    justify-content: flex-end;
   }
 
   /* Leave room at the bottom of the scrolling content so the fixed panel
@@ -152,14 +110,22 @@
     justify-content: center;
   }
 
-  .pad-panel-bar {
+  /* No drag-handle grip needed once the panel isn't a collapsible bottom
+     sheet anymore -- but the title + grid-size/edit controls stay visible. */
+  .pad-panel-grip {
     display: none;
+  }
+
+  .pad-panel-tap-zone {
+    cursor: default;
   }
 
   .layout-main .pad-panel {
     width: 100%;
+    max-width: min(100%, 92vh, 1000px);
+    margin: 0 auto;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
   }
 
   .layout-main .pad-section {
@@ -432,7 +398,28 @@
 .pad-section-header {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+}
+
+.pad-panel-bar {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pad-panel-tap-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.pad-panel-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-h);
 }
 
 .clear-all {
@@ -839,7 +826,11 @@
 
 @media (max-width: 480px) {
   .app {
-    padding: 16px 12px 48px;
+    /* Must keep using safe-area-inset-top here too -- a flat value would
+       override the base rule's notch/status-bar padding and let content
+       slide back up underneath it on most phones (which hit this breakpoint
+       in portrait). */
+    padding: max(16px, env(safe-area-inset-top)) 12px 48px;
   }
 
   .header h1 {

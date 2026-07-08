@@ -63,6 +63,7 @@ interface ResolvedPad {
 
 interface DragState {
   key: number;
+  pointerId: number;
   startX: number;
   startY: number;
   dx: number;
@@ -127,7 +128,12 @@ function App() {
   const [editMode, setEditMode] = useState(false);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [padsCollapsed, setPadsCollapsed] = useState(false);
-  const [panelDrag, setPanelDrag] = useState<{ startY: number; dy: number } | null>(null);
+  const [panelDrag, setPanelDrag] = useState<{
+    pointerId: number;
+    startY: number;
+    dy: number;
+    wasCollapsed: boolean;
+  } | null>(null);
   const tapTimesRef = useRef<number[]>([]);
 
   function changeGridSize(size: GridSize) {
@@ -143,6 +149,12 @@ function App() {
   const diatonicChords = useMemo(() => getDiatonicChords(scale), [scale]);
   const panelFullHeight =
     typeof window !== "undefined" ? Math.min(window.innerHeight * 0.6, 560) : 560;
+  // Opening/closing should feel equally responsive in both directions. Using
+  // the full panel height as the drag distance made closing (which starts
+  // at 100% and only needs to *look* different) feel unresponsive compared
+  // to opening (which starts at 0%, where any movement is instantly
+  // visible) -- so both directions are scaled to the same, shorter throw.
+  const panelDragRange = Math.min(panelFullHeight, 220);
 
   function playChord(chord: ChordDef) {
     playPad(chord, timbre, playback);
@@ -193,24 +205,30 @@ function App() {
   }
 
   function handlePanelBarPointerDown(e: React.PointerEvent) {
-    setPanelDrag({ startY: e.clientY, dy: 0 });
+    setPanelDrag({ pointerId: e.pointerId, startY: e.clientY, dy: 0, wasCollapsed: padsCollapsed });
   }
 
   // The panel bar tracks the finger continuously while dragging (not just
   // start/end points), so it visually follows the swipe in real time.
   useEffect(() => {
     if (panelDrag === null) return;
+    const { pointerId } = panelDrag;
 
     function handleMove(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
       setPanelDrag((prev) => (prev ? { ...prev, dy: e.clientY - prev.startY } : prev));
     }
 
-    function handleEnd() {
+    // Sets an absolute target rather than toggling, so that if this fires
+    // more than once for the same gesture (duplicate/replayed pointerup),
+    // it's idempotent instead of flipping back and forth.
+    function handleEnd(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
       setPanelDrag((prev) => {
         if (prev) {
           const dy = prev.dy;
           if (Math.abs(dy) < 10) {
-            setPadsCollapsed((c) => !c);
+            setPadsCollapsed(!prev.wasCollapsed);
           } else if (dy < -24) {
             setPadsCollapsed(false);
           } else if (dy > 24) {
@@ -237,12 +255,15 @@ function App() {
   // on release we figure out which slot it was dropped on and reorder then.
   useEffect(() => {
     if (drag === null) return;
+    const { pointerId } = drag;
 
     function handleMove(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
       setDrag((prev) => (prev ? { ...prev, dx: e.clientX - prev.startX, dy: e.clientY - prev.startY } : prev));
     }
 
     function handleUp(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
       const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
       const padEl = el?.closest<HTMLElement>("[data-pad-index]");
       const overIndex = padEl ? Number(padEl.dataset.padIndex) : NaN;
@@ -261,7 +282,8 @@ function App() {
       });
     }
 
-    function handleCancel() {
+    function handleCancel(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
       setDrag(null);
     }
 
@@ -506,18 +528,36 @@ function App() {
 
         <div className="layout-main">
           <div className="pad-panel">
-            <button
-              type="button"
-              className="pad-panel-bar"
-              onPointerDown={handlePanelBarPointerDown}
-              aria-expanded={!padsCollapsed}
-              aria-label={padsCollapsed ? "パッドを開く" : "パッドを閉じる"}
-            >
-              <span className="pad-panel-grip" />
-              <span className="pad-panel-bar-row">
+            <div className="pad-panel-bar">
+              <div
+                className="pad-panel-tap-zone"
+                onPointerDown={handlePanelBarPointerDown}
+                role="button"
+                tabIndex={0}
+                aria-expanded={!padsCollapsed}
+                aria-label={padsCollapsed ? "パッドを開く" : "パッドを閉じる"}
+              >
+                <span className="pad-panel-grip" />
                 <span className="pad-panel-title">Pads</span>
-              </span>
-            </button>
+              </div>
+              <div className="pad-section-actions">
+                <Select
+                  value={gridSizeLabel(gridSize)}
+                  onChange={(v) => {
+                    const found = GRID_PRESETS.find((p) => gridSizeLabel(p) === v);
+                    if (found) changeGridSize(found);
+                  }}
+                  options={GRID_PRESETS.map((p) => ({ value: gridSizeLabel(p), label: gridSizeLabel(p) }))}
+                />
+                <button
+                  className={`edit-toggle ${editMode ? "active" : ""}`}
+                  onClick={() => setEditMode((e) => !e)}
+                  aria-label={editMode ? "編集完了" : "パッドを編集"}
+                >
+                  {editMode ? "完了" : <Pencil size={14} />}
+                </button>
+              </div>
+            </div>
             <section
               className={`pad-section pad-panel-body ${padsCollapsed ? "collapsed" : ""}`}
               style={
@@ -527,7 +567,8 @@ function App() {
                         0,
                         Math.min(
                           panelFullHeight,
-                          padsCollapsed ? -panelDrag.dy : panelFullHeight - panelDrag.dy,
+                          (padsCollapsed ? -panelDrag.dy : panelDragRange - panelDrag.dy) *
+                            (panelFullHeight / panelDragRange),
                         ),
                       )}px`,
                       transition: "none",
@@ -536,31 +577,13 @@ function App() {
                   : undefined
               }
             >
-              <div className="pad-section-header">
-                <h2>Pads</h2>
-                <div className="pad-section-actions">
-                  <Select
-                    value={gridSizeLabel(gridSize)}
-                    onChange={(v) => {
-                      const found = GRID_PRESETS.find((p) => gridSizeLabel(p) === v);
-                      if (found) changeGridSize(found);
-                    }}
-                    options={GRID_PRESETS.map((p) => ({ value: gridSizeLabel(p), label: gridSizeLabel(p) }))}
-                  />
-                  <button
-                    className={`edit-toggle ${editMode ? "active" : ""}`}
-                    onClick={() => setEditMode((e) => !e)}
-                    aria-label={editMode ? "編集完了" : "パッドを編集"}
-                  >
-                    {editMode ? "完了" : <Pencil size={14} />}
+              {editMode && (
+                <div className="pad-section-header">
+                  <button className="clear-all" onClick={clearAllPads}>
+                    Clear All
                   </button>
-                  {editMode && (
-                    <button className="clear-all" onClick={clearAllPads}>
-                      Clear All
-                    </button>
-                  )}
                 </div>
-              </div>
+              )}
               <div
                 className="pad-grid"
                 style={{ gridTemplateColumns: `repeat(${gridSize.cols}, 1fr)`, gridTemplateRows: `repeat(${gridSize.rows}, 1fr)` }}
@@ -580,7 +603,14 @@ function App() {
                       onPointerDown={(e) => {
                         if (!editMode || !resolved) return;
                         e.preventDefault();
-                        setDrag({ key: pad.key, startX: e.clientX, startY: e.clientY, dx: 0, dy: 0 });
+                        setDrag({
+                          key: pad.key,
+                          pointerId: e.pointerId,
+                          startX: e.clientX,
+                          startY: e.clientY,
+                          dx: 0,
+                          dy: 0,
+                        });
                       }}
                     >
                       {resolved ? (
