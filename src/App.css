@@ -12,6 +12,96 @@
   flex-direction: column;
 }
 
+/* Narrow/portrait: the pad grid can be taller than the viewport, so it's
+   pinned to the bottom as an always-on-top panel instead of requiring a
+   scroll past all the sidebar controls to reach it. A drag-handle bar stays
+   visible and toggles the body open/closed with a slide+fade animation. */
+@media (max-width: 699px) {
+  .pad-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    background: var(--bg);
+    border-top: 1.5px solid var(--border);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+    padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pad-panel-bar {
+    display: block;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0;
+    touch-action: manipulation;
+  }
+
+  .pad-panel-grip {
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border);
+    margin: 2px auto 10px;
+  }
+
+  .pad-panel-bar-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .pad-panel-title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text-h);
+  }
+
+  .pad-panel-toggle-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .pad-panel-body {
+    max-height: min(60vh, 560px);
+    overflow-y: auto;
+    opacity: 1;
+    transition: max-height 0.32s cubic-bezier(0.34, 1.2, 0.4, 1), opacity 0.22s ease, margin-top 0.32s ease;
+    margin-top: 12px;
+  }
+
+  .pad-panel-body.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* The bar already shows the "Pads" title, so drop the duplicate heading
+     inside the body and let the edit/clear actions take that space. */
+  .pad-panel-body .pad-section-header h2 {
+    display: none;
+  }
+
+  .pad-panel-body .pad-section-header {
+    justify-content: flex-end;
+  }
+
+  /* Leave room at the bottom of the scrolling content so the fixed panel's
+     collapsed bar never covers the last controls. */
+  .layout-sidebar {
+    padding-bottom: 76px;
+  }
+}
+
 /* Tablet/desktop: use the full width instead of one long scrolling column --
    a fixed-width sidebar of controls next to a pad grid that fills the rest. */
 @media (min-width: 700px) {
@@ -34,6 +124,10 @@
     flex: 1;
     display: flex;
     justify-content: center;
+  }
+
+  .pad-panel-bar {
+    display: none;
   }
 
   .layout-main .pad-section {

@@ -87,6 +87,7 @@ function App() {
   const [builderQuality, setBuilderQuality] = useState<ChordQuality>("major");
   const [editMode, setEditMode] = useState(false);
   const [draggingKey, setDraggingKey] = useState<number | null>(null);
+  const [padsCollapsed, setPadsCollapsed] = useState(false);
   const tapTimesRef = useRef<number[]>([]);
 
   const diatonicChords = useMemo(() => getDiatonicChords(scale), [scale]);
@@ -388,63 +389,79 @@ function App() {
         </div>
 
         <div className="layout-main">
-          <section className="pad-section">
-            <div className="pad-section-header">
-              <h2>Pads</h2>
-              <div className="pad-section-actions">
-                <button
-                  className={`edit-toggle ${editMode ? "active" : ""}`}
-                  onClick={() => setEditMode((e) => !e)}
-                >
-                  {editMode ? "完了" : "編集"}
-                </button>
-                <button className="clear-all" onClick={clearAllPads}>
-                  Clear All
-                </button>
-              </div>
-            </div>
-            <div className="pad-grid">
-              {pads.map((pad, index) => {
-                const resolved = pad.source ? resolvePadSource(pad.source, diatonicChords, scale) : null;
-                return (
-                  <div
-                    key={pad.key}
-                    data-pad-index={index}
-                    className={`pad ${resolved ? `function-${resolved.function}` : "empty"} ${
-                      editMode && resolved ? "jiggle" : ""
-                    } ${draggingKey === pad.key ? "dragging" : ""}`}
-                    onClick={() => !editMode && resolved && playChord(resolved.chord)}
-                    onPointerDown={(e) => {
-                      if (!editMode || !resolved) return;
-                      e.preventDefault();
-                      setDraggingKey(pad.key);
-                    }}
+          <div className="pad-panel">
+            <button
+              type="button"
+              className="pad-panel-bar"
+              onClick={() => setPadsCollapsed((c) => !c)}
+              aria-expanded={!padsCollapsed}
+            >
+              <span className="pad-panel-grip" />
+              <span className="pad-panel-bar-row">
+                <span className="pad-panel-title">Pads</span>
+                <span className="pad-panel-toggle-label">
+                  {padsCollapsed ? "ひらく ▲" : "しまう ▼"}
+                </span>
+              </span>
+            </button>
+            <section className={`pad-section pad-panel-body ${padsCollapsed ? "collapsed" : ""}`}>
+              <div className="pad-section-header">
+                <h2>Pads</h2>
+                <div className="pad-section-actions">
+                  <button
+                    className={`edit-toggle ${editMode ? "active" : ""}`}
+                    onClick={() => setEditMode((e) => !e)}
                   >
-                    {resolved ? (
-                      <>
-                        <button
-                          className="pad-clear"
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            clearPad(pad.key);
-                          }}
-                        >
-                          ×
-                        </button>
-                        <span className="chord-name">{chordLabel(resolved.chord)}</span>
-                        <span className="function-badge">
-                          {resolved.detail ?? FUNCTION_LABELS[resolved.function]}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="empty-label">+</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                    {editMode ? "完了" : "編集"}
+                  </button>
+                  <button className="clear-all" onClick={clearAllPads}>
+                    Clear All
+                  </button>
+                </div>
+              </div>
+              <div className="pad-grid">
+                {pads.map((pad, index) => {
+                  const resolved = pad.source ? resolvePadSource(pad.source, diatonicChords, scale) : null;
+                  return (
+                    <div
+                      key={pad.key}
+                      data-pad-index={index}
+                      className={`pad ${resolved ? `function-${resolved.function}` : "empty"} ${
+                        editMode && resolved ? "jiggle" : ""
+                      } ${draggingKey === pad.key ? "dragging" : ""}`}
+                      onClick={() => !editMode && resolved && playChord(resolved.chord)}
+                      onPointerDown={(e) => {
+                        if (!editMode || !resolved) return;
+                        e.preventDefault();
+                        setDraggingKey(pad.key);
+                      }}
+                    >
+                      {resolved ? (
+                        <>
+                          <button
+                            className="pad-clear"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clearPad(pad.key);
+                            }}
+                          >
+                            ×
+                          </button>
+                          <span className="chord-name">{chordLabel(resolved.chord)}</span>
+                          <span className="function-badge">
+                            {resolved.detail ?? FUNCTION_LABELS[resolved.function]}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="empty-label">+</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>
