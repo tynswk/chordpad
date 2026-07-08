@@ -183,9 +183,36 @@ type PadSource = { kind: "diatonic"; degree: number } | { kind: "custom"; chord:
 interface PadState { key: number; source: PadSource | null }
 ```
 
-## 11. 今後（未着手）
+## 11. パッドグリッドサイズ
+
+- Padsヘッダーのドロップダウンでグリッドサイズ（2×2〜6×4のプリセット）を
+  切替可能。縮小時は末尾のパッドを切り詰め、拡大時は空パッドを追加する
+  （既存パッドの内容は保持、`GRID_PRESETS`, `src/App.tsx`）
+- `pad-grid`の`grid-template-columns`/`grid-template-rows`はReactの
+  インラインstyleで動的に設定
+
+## 12. アプリらしい挙動（ホーム画面追加・ランドスケープ）
+
+- `public/manifest.json`を追加し、`display:standalone`・テーマカラーを
+  設定。iOSの「ホーム画面に追加」時のステータスバー領域は
+  `env(safe-area-inset-*)`を`.app`のpaddingに反映して回避
+- ランドスケープ（`orientation:landscape`かつ`min-width:700px`）では
+  `.app`の`max-width`制限を解除し左右の余白を無くした上で、`height:
+  100dvh; overflow:hidden`とし、サイドバーのみ内部スクロールさせることで
+  ページ全体のスクロールが起きないようにしている
+- 全体で`user-select:none`（`input`/`textarea`は除く）にし、Webページで
+  はなくアプリらしい操作感にしている
+- Padsパネル・パッドグリッドには`overscroll-behavior: contain`を設定し、
+  パッド領域のスクロール操作が背後のページをスクロールさせないようにした
+- パッド編集モードでない・パッドが1つも配置されていない場合は「+」ラベル
+  を表示しない（ダイアトニックパレット側の「+追加」ボタンから配置する
+  導線のみを残し、パッド自体が押せそうに見えないようにした）
+- モバイルのPadsパネルは、タップだけでなく上下スワイプでも開閉でき、指の
+  動きにその場で追従する（離した時点でスナップ判定するのではなく、ドラ
+  ッグ中は`pad-panel-body`の`max-height`を指の位置から直接計算して更新）
+
+## 13. 今後（未着手）
 
 - 進行アシスト機能（次に弾くと良いコードのハイライト、ON/OFF可）
 - 状態の永続化（パッド配置・設定のlocalStorage保存）
-- パッドグリッドサイズの可変化
 - アルペジオのパターン/音価のカスタマイズ（現状は固定: 上行・8分・1小節）

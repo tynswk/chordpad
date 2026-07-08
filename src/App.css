@@ -76,6 +76,7 @@
   .pad-panel-body {
     max-height: min(60vh, 560px);
     overflow: hidden;
+    overscroll-behavior: contain;
     opacity: 1;
     transition: max-height 0.32s cubic-bezier(0.34, 1.2, 0.4, 1), opacity 0.22s ease, margin-top 0.32s ease;
     margin-top: 12px;
@@ -83,13 +84,13 @@
     flex-direction: column;
   }
 
-  /* The 4x4 grid is sized to exactly fill the available height (rows as
+  /* The grid is sized to exactly fill the available height (rows as
      fractions, no fixed aspect-ratio) so it never needs to scroll -- a
-     scrollbar here would look out of place inside a pad instrument. */
+     scrollbar here would look out of place inside a pad instrument. Even
+     with zero pads assigned yet, it still needs a real height to show up. */
   .pad-panel-body .pad-grid {
     flex: 1;
-    min-height: 0;
-    grid-template-rows: repeat(4, 1fr);
+    min-height: 220px;
   }
 
   .pad-panel-body .pad {
@@ -115,8 +116,14 @@
   }
 
   /* Leave room at the bottom of the scrolling content so the fixed panel
-     never covers the last controls, whether collapsed or fully expanded. */
+     never covers the last controls -- but only as much room as the panel
+     actually needs right now, or collapsed state leaves an ugly empty gap. */
   .layout-sidebar {
+    padding-bottom: 64px;
+    transition: padding-bottom 0.32s cubic-bezier(0.34, 1.2, 0.4, 1);
+  }
+
+  .layout[data-pads-collapsed="false"] .layout-sidebar {
     padding-bottom: calc(min(60vh, 560px) + 56px);
   }
 }
@@ -494,11 +501,6 @@
   box-shadow: none;
 }
 
-.pad .empty-label {
-  font-size: 20px;
-  opacity: 0.3;
-}
-
 .pad-clear {
   position: absolute;
   top: 6px;
@@ -858,5 +860,50 @@
 
   .bpm-row {
     gap: 8px;
+  }
+}
+
+/* Landscape: feel like an installed app, not a web page -- everything fits
+   in one screen with no scrolling, and no wasted side margins. The sidebar
+   scrolls internally instead of the whole page scrolling. */
+@media (min-width: 700px) and (orientation: landscape) {
+  .app {
+    max-width: none;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .header {
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+  }
+
+  .layout {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .layout-sidebar {
+    max-height: 100%;
+    overflow-y: auto;
+  }
+
+  .layout-main {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .layout-main .pad-panel {
+    height: 100%;
+  }
+
+  .layout-main .pad-section {
+    max-height: 100%;
   }
 }

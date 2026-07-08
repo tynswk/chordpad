@@ -25,7 +25,26 @@ import {
   type Timbre,
 } from "./state/types";
 
-const PAD_COUNT = 16;
+interface GridSize {
+  cols: number;
+  rows: number;
+}
+
+const GRID_PRESETS: GridSize[] = [
+  { cols: 2, rows: 2 },
+  { cols: 3, rows: 3 },
+  { cols: 4, rows: 3 },
+  { cols: 4, rows: 4 },
+  { cols: 4, rows: 5 },
+  { cols: 5, rows: 4 },
+  { cols: 6, rows: 4 },
+];
+
+const DEFAULT_GRID_SIZE: GridSize = { cols: 4, rows: 4 };
+
+function gridSizeLabel(size: GridSize): string {
+  return `${size.cols} × ${size.rows}`;
+}
 
 type PadSource = { kind: "diatonic"; degree: number } | { kind: "custom"; chord: ChordDef };
 
@@ -52,8 +71,8 @@ interface DragState {
 
 let padKeySeq = 0;
 
-function createEmptyPads(): PadState[] {
-  return Array.from({ length: PAD_COUNT }, () => ({ key: padKeySeq++, source: null }));
+function createEmptyPads(count: number): PadState[] {
+  return Array.from({ length: count }, () => ({ key: padKeySeq++, source: null }));
 }
 
 function resolvePadSource(
@@ -99,7 +118,8 @@ function App() {
     useHarmonicMinorDominant: false,
     use7thChords: false,
   });
-  const [pads, setPads] = useState<PadState[]>(createEmptyPads);
+  const [gridSize, setGridSize] = useState<GridSize>(DEFAULT_GRID_SIZE);
+  const [pads, setPads] = useState<PadState[]>(() => createEmptyPads(DEFAULT_GRID_SIZE.cols * DEFAULT_GRID_SIZE.rows));
   const [timbre, setTimbre] = useState<Timbre>(DEFAULT_TIMBRE);
   const [playback, setPlayback] = useState(DEFAULT_PLAYBACK);
   const [builderRoot, setBuilderRoot] = useState<NoteName>("C");
@@ -107,10 +127,22 @@ function App() {
   const [editMode, setEditMode] = useState(false);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [padsCollapsed, setPadsCollapsed] = useState(false);
+  const [panelDrag, setPanelDrag] = useState<{ startY: number; dy: number } | null>(null);
   const tapTimesRef = useRef<number[]>([]);
-  const panelSwipeRef = useRef<{ startY: number } | null>(null);
+
+  function changeGridSize(size: GridSize) {
+    setGridSize(size);
+    const count = size.cols * size.rows;
+    setPads((prev) => {
+      if (prev.length === count) return prev;
+      if (prev.length > count) return prev.slice(0, count);
+      return [...prev, ...createEmptyPads(count - prev.length)];
+    });
+  }
 
   const diatonicChords = useMemo(() => getDiatonicChords(scale), [scale]);
+  const panelFullHeight =
+    typeof window !== "undefined" ? Math.min(window.innerHeight * 0.6, 560) : 560;
 
   function playChord(chord: ChordDef) {
     playPad(chord, timbre, playback);
@@ -131,7 +163,7 @@ function App() {
   }
 
   function clearAllPads() {
-    setPads(createEmptyPads());
+    setPads(createEmptyPads(gridSize.cols * gridSize.rows));
   }
 
   function adjustBpm(delta: number) {
@@ -161,22 +193,45 @@ function App() {
   }
 
   function handlePanelBarPointerDown(e: React.PointerEvent) {
-    panelSwipeRef.current = { startY: e.clientY };
+    setPanelDrag({ startY: e.clientY, dy: 0 });
   }
 
-  function handlePanelBarPointerUp(e: React.PointerEvent) {
-    const start = panelSwipeRef.current;
-    panelSwipeRef.current = null;
-    if (!start) return;
-    const dy = e.clientY - start.startY;
-    if (Math.abs(dy) < 10) {
-      setPadsCollapsed((c) => !c);
-    } else if (dy < -24) {
-      setPadsCollapsed(false);
-    } else if (dy > 24) {
-      setPadsCollapsed(true);
+  // The panel bar tracks the finger continuously while dragging (not just
+  // start/end points), so it visually follows the swipe in real time.
+  useEffect(() => {
+    if (panelDrag === null) return;
+
+    function handleMove(e: PointerEvent) {
+      setPanelDrag((prev) => (prev ? { ...prev, dy: e.clientY - prev.startY } : prev));
     }
-  }
+
+    function handleEnd() {
+      setPanelDrag((prev) => {
+        if (prev) {
+          const dy = prev.dy;
+          if (Math.abs(dy) < 10) {
+            setPadsCollapsed((c) => !c);
+          } else if (dy < -24) {
+            setPadsCollapsed(false);
+          } else if (dy > 24) {
+            setPadsCollapsed(true);
+          }
+        }
+        return null;
+      });
+    }
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleEnd);
+    window.addEventListener("pointercancel", handleEnd);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleEnd);
+      window.removeEventListener("pointercancel", handleEnd);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only
+    // re-subscribe when a swipe starts/stops, not on every dy update.
+  }, [panelDrag === null]);
 
   // Pads float freely under the pointer while dragging (no live grid-swap);
   // on release we figure out which slot it was dropped on and reorder then.
@@ -274,7 +329,7 @@ function App() {
         </div>
       </header>
 
-      <div className="layout">
+      <div className="layout" data-pads-collapsed={padsCollapsed}>
         <div className="layout-sidebar">
           <section className="palette">
             <div className="palette-header">
@@ -455,7 +510,6 @@ function App() {
               type="button"
               className="pad-panel-bar"
               onPointerDown={handlePanelBarPointerDown}
-              onPointerUp={handlePanelBarPointerUp}
               aria-expanded={!padsCollapsed}
               aria-label={padsCollapsed ? "パッドを開く" : "パッドを閉じる"}
             >
@@ -464,10 +518,35 @@ function App() {
                 <span className="pad-panel-title">Pads</span>
               </span>
             </button>
-            <section className={`pad-section pad-panel-body ${padsCollapsed ? "collapsed" : ""}`}>
+            <section
+              className={`pad-section pad-panel-body ${padsCollapsed ? "collapsed" : ""}`}
+              style={
+                panelDrag
+                  ? {
+                      maxHeight: `${Math.max(
+                        0,
+                        Math.min(
+                          panelFullHeight,
+                          padsCollapsed ? -panelDrag.dy : panelFullHeight - panelDrag.dy,
+                        ),
+                      )}px`,
+                      transition: "none",
+                      opacity: 1,
+                    }
+                  : undefined
+              }
+            >
               <div className="pad-section-header">
                 <h2>Pads</h2>
                 <div className="pad-section-actions">
+                  <Select
+                    value={gridSizeLabel(gridSize)}
+                    onChange={(v) => {
+                      const found = GRID_PRESETS.find((p) => gridSizeLabel(p) === v);
+                      if (found) changeGridSize(found);
+                    }}
+                    options={GRID_PRESETS.map((p) => ({ value: gridSizeLabel(p), label: gridSizeLabel(p) }))}
+                  />
                   <button
                     className={`edit-toggle ${editMode ? "active" : ""}`}
                     onClick={() => setEditMode((e) => !e)}
@@ -482,7 +561,10 @@ function App() {
                   )}
                 </div>
               </div>
-              <div className="pad-grid">
+              <div
+                className="pad-grid"
+                style={{ gridTemplateColumns: `repeat(${gridSize.cols}, 1fr)`, gridTemplateRows: `repeat(${gridSize.rows}, 1fr)` }}
+              >
                 {pads.map((pad, index) => {
                   const resolved = pad.source ? resolvePadSource(pad.source, diatonicChords, scale) : null;
                   const isDragging = drag?.key === pad.key;
@@ -520,9 +602,7 @@ function App() {
                             {resolved.detail ?? FUNCTION_LABELS[resolved.function]}
                           </span>
                         </>
-                      ) : (
-                        <span className="empty-label">+</span>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })}
