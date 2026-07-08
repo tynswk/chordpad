@@ -20,7 +20,19 @@ export type ChordQuality =
   | "6"
   | "add9";
 
-export type ChordFunction = "tonic" | "subdominant" | "dominant" | "nonDiatonic";
+export type ChordFunction =
+  | "tonic"
+  | "subdominant"
+  | "dominant"
+  | "secondaryDominant"
+  | "borrowed"
+  | "nonDiatonic";
+
+export interface ChordFunctionResult {
+  function: ChordFunction;
+  /** Short human-readable extra context, e.g. "V/ii" or "同主短調から借用". */
+  detail?: string;
+}
 
 export interface ChordDef {
   root: NoteName;
@@ -130,22 +142,70 @@ export function chordPitchClasses(chord: ChordDef): Set<number> {
   return new Set(QUALITY_INTERVALS[chord.quality].map((interval) => (rootIndex + interval) % 12));
 }
 
+const SEVENTH_TO_TRIAD_QUALITY: Partial<Record<ChordQuality, ChordQuality>> = {
+  maj7: "major",
+  m7: "minor",
+  "7": "major",
+  m7b5: "dim",
+};
+
+function qualitiesMatch(a: ChordQuality, b: ChordQuality): boolean {
+  if (a === b) return true;
+  // Treat a chord as matching a diatonic slot regardless of triad/7th mode,
+  // e.g. a plain "major" pad still reads as tonic once 7th chords are toggled
+  // on and the palette moves to "maj7".
+  return SEVENTH_TO_TRIAD_QUALITY[a] === b || SEVENTH_TO_TRIAD_QUALITY[b] === a;
+}
+
 /**
  * Determines the functional-harmony label for an arbitrary chord relative to
- * the current scale, by matching root+quality against the diatonic set.
+ * the current scale. In order: diatonic match, secondary dominant (a
+ * major/dominant-7th chord a fifth above a diatonic chord's root), a chord
+ * borrowed from the parallel major/minor key, otherwise non-diatonic.
  */
-export function getChordFunction(chord: ChordDef, scale: ScaleConfig): ChordFunction {
+export function getChordFunctionDetail(chord: ChordDef, scale: ScaleConfig): ChordFunctionResult {
   const diatonicChords = getDiatonicChords(scale);
   const match = diatonicChords.find(
-    (d) => d.chord.root === chord.root && d.chord.quality === chord.quality,
+    (d) => d.chord.root === chord.root && qualitiesMatch(d.chord.quality, chord.quality),
   );
-  return match ? match.function : "nonDiatonic";
+  if (match) return { function: match.function };
+
+  if (chord.quality === "major" || chord.quality === "7") {
+    const targetRoot = transposeNote(chord.root, -7);
+    const target = diatonicChords.find((d) => d.chord.root === targetRoot);
+    if (target) {
+      return { function: "secondaryDominant", detail: `V/${target.romanLabel}` };
+    }
+  }
+
+  const parallelScale: ScaleConfig = {
+    ...scale,
+    type: scale.type === "major" ? "minor" : "major",
+  };
+  const parallelChords = getDiatonicChords(parallelScale);
+  const borrowedMatch = parallelChords.find(
+    (d) => d.chord.root === chord.root && qualitiesMatch(d.chord.quality, chord.quality),
+  );
+  if (borrowedMatch) {
+    return {
+      function: "borrowed",
+      detail: scale.type === "major" ? "同主短調から借用" : "同主長調から借用",
+    };
+  }
+
+  return { function: "nonDiatonic" };
+}
+
+export function getChordFunction(chord: ChordDef, scale: ScaleConfig): ChordFunction {
+  return getChordFunctionDetail(chord, scale).function;
 }
 
 export const FUNCTION_LABELS: Record<ChordFunction, string> = {
   tonic: "T",
   subdominant: "SD",
   dominant: "D",
+  secondaryDominant: "→D",
+  borrowed: "借用",
   nonDiatonic: "—",
 };
 

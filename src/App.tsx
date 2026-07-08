@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { playPad } from "./audio/engine";
 import { Select } from "./components/Select";
@@ -6,32 +6,51 @@ import {
   CHORD_QUALITIES,
   chordLabel,
   FUNCTION_LABELS,
-  getChordFunction,
+  getChordFunctionDetail,
   getDiatonicChords,
   NOTE_NAMES,
   type ChordDef,
   type ChordQuality,
+  type DiatonicChord,
   type NoteName,
   type ScaleConfig,
 } from "./music/theory";
-import {
-  DEFAULT_PLAYBACK,
-  DEFAULT_TIMBRE,
-  STROKE_PRESETS,
-  type PlaybackSettings,
-  type PlayMode,
-  type Timbre,
-} from "./state/types";
+import { DEFAULT_PLAYBACK, DEFAULT_TIMBRE, MAX_BPM, MIN_BPM, type Timbre } from "./state/types";
 
 const PAD_COUNT = 16;
 
+type PadSource = { kind: "diatonic"; degree: number } | { kind: "custom"; chord: ChordDef };
+
 interface PadState {
-  id: number;
-  source: ChordDef | null;
+  /** Stable identity for this slot, independent of its position in the grid
+   * (which changes as pads are reordered). Never reassigned. */
+  key: number;
+  source: PadSource | null;
 }
 
+interface ResolvedPad {
+  chord: ChordDef;
+  function: ReturnType<typeof getChordFunctionDetail>["function"];
+  detail?: string;
+}
+
+let padKeySeq = 0;
+
 function createEmptyPads(): PadState[] {
-  return Array.from({ length: PAD_COUNT }, (_, id) => ({ id, source: null }));
+  return Array.from({ length: PAD_COUNT }, () => ({ key: padKeySeq++, source: null }));
+}
+
+function resolvePadSource(
+  source: PadSource,
+  diatonicChords: DiatonicChord[],
+  scale: ScaleConfig,
+): ResolvedPad | null {
+  if (source.kind === "diatonic") {
+    const dc = diatonicChords[source.degree];
+    return dc ? { chord: dc.chord, function: dc.function } : null;
+  }
+  const detail = getChordFunctionDetail(source.chord, scale);
+  return { chord: source.chord, function: detail.function, detail: detail.detail };
 }
 
 type Theme = "light" | "dark";
@@ -40,6 +59,11 @@ function getInitialTheme(): Theme {
   const stored = localStorage.getItem("chordpad-theme");
   if (stored === "light" || stored === "dark") return stored;
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function clampBpm(value: number): number {
+  if (Number.isNaN(value)) return DEFAULT_PLAYBACK.bpm;
+  return Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(value)));
 }
 
 function App() {
@@ -58,9 +82,12 @@ function App() {
   });
   const [pads, setPads] = useState<PadState[]>(createEmptyPads);
   const [timbre, setTimbre] = useState<Timbre>(DEFAULT_TIMBRE);
-  const [playback, setPlayback] = useState<PlaybackSettings>(DEFAULT_PLAYBACK);
+  const [playback, setPlayback] = useState(DEFAULT_PLAYBACK);
   const [builderRoot, setBuilderRoot] = useState<NoteName>("C");
   const [builderQuality, setBuilderQuality] = useState<ChordQuality>("major");
+  const [editMode, setEditMode] = useState(false);
+  const [draggingKey, setDraggingKey] = useState<number | null>(null);
+  const tapTimesRef = useRef<number[]>([]);
 
   const diatonicChords = useMemo(() => getDiatonicChords(scale), [scale]);
 
@@ -68,23 +95,82 @@ function App() {
     playPad(chord, timbre, playback);
   }
 
-  function assignToNextEmptyPad(chord: ChordDef) {
+  function assignToNextEmptyPad(source: PadSource) {
     setPads((prev) => {
       const index = prev.findIndex((pad) => pad.source === null);
       if (index === -1) return prev;
       const next = [...prev];
-      next[index] = { ...next[index], source: chord };
+      next[index] = { ...next[index], source };
       return next;
     });
   }
 
-  function clearPad(id: number) {
-    setPads((prev) => prev.map((pad) => (pad.id === id ? { ...pad, source: null } : pad)));
+  function clearPad(key: number) {
+    setPads((prev) => prev.map((pad) => (pad.key === key ? { ...pad, source: null } : pad)));
   }
 
   function clearAllPads() {
     setPads(createEmptyPads());
   }
+
+  function adjustBpm(delta: number) {
+    setPlayback((p) => ({ ...p, bpm: clampBpm(p.bpm + delta) }));
+  }
+
+  function handleBpmInput(value: string) {
+    const parsed = Number(value);
+    if (value === "" || Number.isNaN(parsed)) return;
+    setPlayback((p) => ({ ...p, bpm: clampBpm(parsed) }));
+  }
+
+  function handleTapTempo() {
+    const now = performance.now();
+    const taps = tapTimesRef.current;
+    const last = taps[taps.length - 1];
+    if (last !== undefined && now - last > 2000) {
+      taps.length = 0;
+    }
+    taps.push(now);
+    if (taps.length > 6) taps.shift();
+    if (taps.length >= 2) {
+      const intervals = taps.slice(1).map((t, i) => t - taps[i]);
+      const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      setPlayback((p) => ({ ...p, bpm: clampBpm(60000 / avgMs) }));
+    }
+  }
+
+  useEffect(() => {
+    if (draggingKey === null) return;
+
+    function handleMove(e: PointerEvent) {
+      const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const padEl = el?.closest<HTMLElement>("[data-pad-index]");
+      if (!padEl) return;
+      const overIndex = Number(padEl.dataset.padIndex);
+      if (Number.isNaN(overIndex)) return;
+      setPads((prev) => {
+        const fromIndex = prev.findIndex((p) => p.key === draggingKey);
+        if (fromIndex === -1 || fromIndex === overIndex) return prev;
+        const next = [...prev];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(overIndex, 0, moved);
+        return next;
+      });
+    }
+
+    function handleUp() {
+      setDraggingKey(null);
+    }
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [draggingKey]);
 
   const builderChord: ChordDef = { root: builderRoot, quality: builderQuality, octave: 4 };
 
@@ -121,17 +207,6 @@ function App() {
               ]}
             />
           </label>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={scale.use7thChords}
-              onChange={(e) => setScale((s) => ({ ...s, use7thChords: e.target.checked }))}
-            />
-            <span className="toggle-track">
-              <span className="toggle-thumb" />
-            </span>
-            <span className="toggle-label">7th chords</span>
-          </label>
           {scale.type === "minor" && (
             <label className="toggle">
               <input
@@ -153,7 +228,20 @@ function App() {
       <div className="layout">
         <div className="layout-sidebar">
           <section className="palette">
-            <h2>Diatonic Chords</h2>
+            <div className="palette-header">
+              <h2>Diatonic Chords</h2>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={scale.use7thChords}
+                  onChange={(e) => setScale((s) => ({ ...s, use7thChords: e.target.checked }))}
+                />
+                <span className="toggle-track">
+                  <span className="toggle-thumb" />
+                </span>
+                <span className="toggle-label">7th chords</span>
+              </label>
+            </div>
             <div className="palette-grid">
               {diatonicChords.map((dc) => (
                 <div key={dc.degree} className={`palette-card function-${dc.function}`}>
@@ -162,7 +250,11 @@ function App() {
                     <span className="chord-name">{chordLabel(dc.chord)}</span>
                     <span className="function-badge">{FUNCTION_LABELS[dc.function]}</span>
                   </button>
-                  <button className="add-to-pad" onClick={() => assignToNextEmptyPad(dc.chord)} title="Add to pad">
+                  <button
+                    className="add-to-pad"
+                    onClick={() => assignToNextEmptyPad({ kind: "diatonic", degree: dc.degree })}
+                    title="Add to pad"
+                  >
                     +
                   </button>
                 </div>
@@ -187,7 +279,10 @@ function App() {
               <button className="builder-preview" onClick={() => playChord(builderChord)}>
                 ▶ {chordLabel(builderChord)}
               </button>
-              <button className="add-to-pad builder-add" onClick={() => assignToNextEmptyPad(builderChord)}>
+              <button
+                className="add-to-pad builder-add"
+                onClick={() => assignToNextEmptyPad({ kind: "custom", chord: builderChord })}
+              >
                 + Add to Pad
               </button>
             </div>
@@ -197,16 +292,20 @@ function App() {
             <h2>Timbre</h2>
             <div className="instrument-switch">
               <button
-                className={`instrument-btn ${timbre.type === "piano" ? "active" : ""}`}
+                className={`instrument-btn emoji-only ${timbre.type === "piano" ? "active" : ""}`}
                 onClick={() => setTimbre((t) => ({ ...t, type: "piano" }))}
+                aria-label="Piano"
+                title="Piano"
               >
-                🎹 Piano
+                🎹
               </button>
               <button
-                className={`instrument-btn ${timbre.type === "guitar" ? "active" : ""}`}
+                className={`instrument-btn emoji-only ${timbre.type === "guitar" ? "active" : ""}`}
                 onClick={() => setTimbre((t) => ({ ...t, type: "guitar" }))}
+                aria-label="Guitar"
+                title="Guitar"
               >
-                🎸 Guitar
+                🎸
               </button>
             </div>
 
@@ -263,39 +362,27 @@ function App() {
           </section>
 
           <section className="playback-section">
-            <h2>BPM & Stroke</h2>
-            <div className="playback-row">
-              <label className="bpm-label">
-                BPM: {playback.bpm}
-                <input
-                  type="range"
-                  min={40}
-                  max={240}
-                  value={playback.bpm}
-                  onChange={(e) => setPlayback((p) => ({ ...p, bpm: Number(e.target.value) }))}
-                />
-              </label>
-              <div className="mode-switch">
-                <button
-                  className={`instrument-btn ${playback.mode === "block" ? "active" : ""}`}
-                  onClick={() => setPlayback((p) => ({ ...p, mode: "block" as PlayMode }))}
-                >
-                  一括
+            <h2>BPM</h2>
+            <div className="bpm-row">
+              <div className="stepper">
+                <button type="button" onClick={() => adjustBpm(-1)} aria-label="BPMを下げる">
+                  −
                 </button>
-                <button
-                  className={`instrument-btn ${playback.mode === "strum" ? "active" : ""}`}
-                  onClick={() => setPlayback((p) => ({ ...p, mode: "strum" as PlayMode }))}
-                >
-                  ストローク
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_BPM}
+                  max={MAX_BPM}
+                  value={playback.bpm}
+                  onChange={(e) => handleBpmInput(e.target.value)}
+                />
+                <button type="button" onClick={() => adjustBpm(1)} aria-label="BPMを上げる">
+                  +
                 </button>
               </div>
-              {playback.mode === "strum" && (
-                <Select
-                  value={playback.strokePatternId}
-                  onChange={(v) => setPlayback((p) => ({ ...p, strokePatternId: v }))}
-                  options={STROKE_PRESETS.map((preset) => ({ value: preset.id, label: preset.name }))}
-                />
-              )}
+              <button type="button" className="tap-tempo" onClick={handleTapTempo}>
+                TAP
+              </button>
             </div>
           </section>
         </div>
@@ -304,32 +391,51 @@ function App() {
           <section className="pad-section">
             <div className="pad-section-header">
               <h2>Pads</h2>
-              <button className="clear-all" onClick={clearAllPads}>
-                Clear All
-              </button>
+              <div className="pad-section-actions">
+                <button
+                  className={`edit-toggle ${editMode ? "active" : ""}`}
+                  onClick={() => setEditMode((e) => !e)}
+                >
+                  {editMode ? "完了" : "編集"}
+                </button>
+                <button className="clear-all" onClick={clearAllPads}>
+                  Clear All
+                </button>
+              </div>
             </div>
             <div className="pad-grid">
-              {pads.map((pad) => {
-                const fn = pad.source ? getChordFunction(pad.source, scale) : null;
+              {pads.map((pad, index) => {
+                const resolved = pad.source ? resolvePadSource(pad.source, diatonicChords, scale) : null;
                 return (
                   <div
-                    key={pad.id}
-                    className={`pad ${fn ? `function-${fn}` : "empty"}`}
-                    onClick={() => pad.source && playChord(pad.source)}
+                    key={pad.key}
+                    data-pad-index={index}
+                    className={`pad ${resolved ? `function-${resolved.function}` : "empty"} ${
+                      editMode && resolved ? "jiggle" : ""
+                    } ${draggingKey === pad.key ? "dragging" : ""}`}
+                    onClick={() => !editMode && resolved && playChord(resolved.chord)}
+                    onPointerDown={(e) => {
+                      if (!editMode || !resolved) return;
+                      e.preventDefault();
+                      setDraggingKey(pad.key);
+                    }}
                   >
-                    {pad.source && fn ? (
+                    {resolved ? (
                       <>
                         <button
                           className="pad-clear"
+                          onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.stopPropagation();
-                            clearPad(pad.id);
+                            clearPad(pad.key);
                           }}
                         >
                           ×
                         </button>
-                        <span className="chord-name">{chordLabel(pad.source)}</span>
-                        <span className="function-badge">{FUNCTION_LABELS[fn]}</span>
+                        <span className="chord-name">{chordLabel(resolved.chord)}</span>
+                        <span className="function-badge">
+                          {resolved.detail ?? FUNCTION_LABELS[resolved.function]}
+                        </span>
                       </>
                     ) : (
                       <span className="empty-label">+</span>

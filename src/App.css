@@ -268,6 +268,8 @@
 .function-tonic { background: rgba(70, 160, 255, 0.16); }
 .function-subdominant { background: rgba(120, 220, 140, 0.16); }
 .function-dominant { background: rgba(255, 120, 170, 0.16); }
+.function-secondaryDominant { background: rgba(255, 180, 90, 0.18); }
+.function-borrowed { background: rgba(160, 130, 255, 0.18); }
 .function-nonDiatonic { background: rgba(180, 180, 180, 0.12); }
 
 .pad-section-header {
@@ -427,8 +429,7 @@
   margin-bottom: 32px;
 }
 
-.instrument-switch,
-.mode-switch {
+.instrument-switch {
   display: inline-flex;
   gap: 6px;
   padding: 4px;
@@ -489,27 +490,158 @@
   cursor: pointer;
 }
 
-.playback-row {
+.bpm-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 12px;
   align-items: center;
 }
 
-.bpm-label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-h);
-  min-width: 220px;
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--code-bg);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
 }
 
-.bpm-label input[type="range"] {
-  width: 100%;
-  accent-color: var(--accent);
+.stepper button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--text-h);
+  font-size: 18px;
+  font-weight: 700;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.stepper button:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.stepper button:active {
+  transform: scale(0.92);
+}
+
+.stepper input[type="number"] {
+  width: 56px;
+  height: 36px;
+  border: none;
+  border-left: 1.5px solid var(--border);
+  border-right: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.stepper input[type="number"]::-webkit-outer-spin-button,
+.stepper input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.tap-tempo {
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.tap-tempo:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tap-tempo:active {
+  transform: scale(0.94);
+}
+
+.palette-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.palette-header h2 {
+  margin-bottom: 0;
+}
+
+.instrument-btn.emoji-only {
+  font-size: 22px;
+  padding: 8px 20px;
+  line-height: 1;
+}
+
+.pad-section-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-toggle {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 16px;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  transition: all 0.15s ease;
+}
+
+.edit-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.edit-toggle.active {
+  background: linear-gradient(135deg, var(--accent), #ff8fd6);
+  color: #fff;
+  border-color: transparent;
+}
+
+.edit-toggle:active {
+  transform: scale(0.96);
+}
+
+/* iOS-style jiggle for reorderable pads in edit mode */
+@keyframes pad-jiggle {
+  0% { transform: rotate(-1.4deg); }
+  50% { transform: rotate(1.4deg); }
+  100% { transform: rotate(-1.4deg); }
+}
+
+.pad.jiggle {
+  animation: pad-jiggle 0.22s infinite ease-in-out;
+  touch-action: none;
+  cursor: grab;
+}
+
+.pad.jiggle:nth-child(odd) {
+  animation-delay: -0.11s;
+}
+
+.pad.dragging {
+  animation: none;
+  cursor: grabbing;
+  transform: scale(1.06);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  z-index: 5;
 }
 
 /* Touch handling: avoid double-tap-zoom / 300ms delay on tappable controls,
@@ -553,12 +685,7 @@
     gap: 16px;
   }
 
-  .bpm-label {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .playback-row {
-    gap: 12px;
+  .bpm-row {
+    gap: 8px;
   }
 }

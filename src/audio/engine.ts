@@ -2,8 +2,7 @@ import { makeOverdriveCurve, overdriveMakeupGain } from "./distortion";
 import { pluckKarplusString, preloadKarplusStrongWorklet } from "./karplusStrong";
 import { voiceForGuitar, voiceForPiano } from "./voicing";
 import { registerVoice, stopAllVoices } from "./voiceRegistry";
-import type { PlaybackSettings, StrokePattern, Timbre } from "../state/types";
-import { STROKE_PRESETS } from "../state/types";
+import type { PlaybackSettings, Timbre } from "../state/types";
 import type { ChordDef } from "../music/theory";
 
 const STEAL_FADE_MS = 25;
@@ -140,49 +139,29 @@ function voiceChord(chord: ChordDef, timbre: Timbre): number[] {
   return timbre.type === "guitar" ? voiceForGuitar(chord) : voiceForPiano(chord);
 }
 
-/** Plays a full chord as a single block at "now" through the given timbre. */
-export function playChordBlock(chord: ChordDef, timbre: Timbre): void {
-  const ctx = getAudioContext();
-  const destination = buildTimbreChain(ctx, timbre);
-  const startTime = ctx.currentTime + 0.01;
-  for (const note of voiceChord(chord, timbre)) {
-    playNote(ctx, destination, midiToFrequency(note), startTime, timbre.type, 1);
-  }
-}
+const ARPEGGIO_STEPS_PER_BAR = 8; // eighth notes across one 4/4 bar
 
-/** Plays a chord following a strum pattern, timed against the given BPM. */
-export function playChordStrum(
-  chord: ChordDef,
-  timbre: Timbre,
-  playback: PlaybackSettings,
-): void {
-  const pattern: StrokePattern =
-    STROKE_PRESETS.find((p) => p.id === playback.strokePatternId) ?? STROKE_PRESETS[0];
+/** Plays the chord as an ascending eighth-note arpeggio across one bar,
+ * cycling through the voiced notes to fill all 8 steps. */
+export function playChordArpeggio(chord: ChordDef, timbre: Timbre, bpm: number): void {
   const ctx = getAudioContext();
   const destination = buildTimbreChain(ctx, timbre);
-  const secondsPerBeat = 60 / playback.bpm;
+  const secondsPerBeat = 60 / bpm;
+  const eighthDuration = secondsPerBeat / 2;
   const baseTime = ctx.currentTime + 0.01;
-  const strumSpreadMs = 10; // delay between adjacent strings within one strum
 
-  const sortedNotes = voiceChord(chord, timbre).sort((a, b) => a - b);
+  const notes = voiceChord(chord, timbre).sort((a, b) => a - b);
 
-  for (const step of pattern.steps) {
-    const stepTime = baseTime + step.beat * secondsPerBeat;
-    const orderedNotes = step.direction === "down" ? sortedNotes : [...sortedNotes].reverse();
-    orderedNotes.forEach((note, index) => {
-      const noteTime = stepTime + (index * strumSpreadMs) / 1000;
-      playNote(ctx, destination, midiToFrequency(note), noteTime, timbre.type, step.velocity);
-    });
+  for (let step = 0; step < ARPEGGIO_STEPS_PER_BAR; step++) {
+    const note = notes[step % notes.length];
+    const stepTime = baseTime + step * eighthDuration;
+    playNote(ctx, destination, midiToFrequency(note), stepTime, timbre.type, 0.85);
   }
 }
 
-/** Plays a pad according to the current playback mode (block or strum). Cuts
- * off whatever was still ringing from the previously played pad first. */
+/** Plays a pad as a one-bar eighth-note arpeggio. Cuts off whatever was
+ * still ringing from the previously played pad first. */
 export function playPad(chord: ChordDef, timbre: Timbre, playback: PlaybackSettings): void {
   stopAllVoices();
-  if (playback.mode === "strum") {
-    playChordStrum(chord, timbre, playback);
-  } else {
-    playChordBlock(chord, timbre);
-  }
+  playChordArpeggio(chord, timbre, playback.bpm);
 }
