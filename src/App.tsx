@@ -220,7 +220,7 @@ function App() {
                     value={timbre.distortionAmount}
                     onChange={(e) => setTimbre((t) => ({ ...t, distortionAmount: Number(e.target.value) }))}
                   />
-                  <span>Distortion</span>
+                  <span>Overdrive</span>
                 </label>
                 <label className="knob">
                   <input
@@ -257,17 +257,6 @@ function App() {
                     }
                   />
                   <span>High</span>
-                </label>
-                <label className="toggle">
-                  <input
-                    type="checkbox"
-                    checked={timbre.cabinetOn}
-                    onChange={(e) => setTimbre((t) => ({ ...t, cabinetOn: e.target.checked }))}
-                  />
-                  <span className="toggle-track">
-                    <span className="toggle-thumb" />
-                  </span>
-                  <span className="toggle-label">Cabinet</span>
                 </label>
               </div>
             )}

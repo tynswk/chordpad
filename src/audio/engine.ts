@@ -1,5 +1,4 @@
-import { createCabinetImpulseResponse } from "./cabinet";
-import { distortionMakeupGain, makeDistortionCurve } from "./distortion";
+import { makeOverdriveCurve, overdriveMakeupGain } from "./distortion";
 import { pluckKarplusString, preloadKarplusStrongWorklet } from "./karplusStrong";
 import { voiceForGuitar, voiceForPiano } from "./voicing";
 import { registerVoice, stopAllVoices } from "./voiceRegistry";
@@ -10,7 +9,6 @@ import type { ChordDef } from "../music/theory";
 const STEAL_FADE_MS = 25;
 
 let audioContext: AudioContext | null = null;
-let cabinetIR: AudioBuffer | null = null;
 
 function getAudioContext(): AudioContext {
   if (!audioContext) {
@@ -21,13 +19,6 @@ function getAudioContext(): AudioContext {
     void audioContext.resume();
   }
   return audioContext;
-}
-
-function getCabinetIR(ctx: AudioContext): AudioBuffer {
-  if (!cabinetIR) {
-    cabinetIR = createCabinetImpulseResponse(ctx);
-  }
-  return cabinetIR;
 }
 
 function midiToFrequency(midiNote: number): number {
@@ -52,12 +43,12 @@ function buildTimbreChain(ctx: AudioContext, timbre: Timbre): AudioNode {
     return input;
   }
 
-  // Guitar: PreGain -> WaveShaper -> Amp EQ (low/mid/high) -> Cabinet IR (optional) -> PostGain
+  // Guitar: PreGain -> WaveShaper (soft-clip overdrive) -> Amp EQ (low/mid/high) -> PostGain
   const preGain = ctx.createGain();
   preGain.gain.value = 1.4;
 
   const shaper = ctx.createWaveShaper();
-  shaper.curve = makeDistortionCurve(timbre.distortionAmount);
+  shaper.curve = makeOverdriveCurve(timbre.distortionAmount);
   shaper.oversample = "4x";
 
   const low = ctx.createBiquadFilter();
@@ -77,23 +68,14 @@ function buildTimbreChain(ctx: AudioContext, timbre: Timbre): AudioNode {
   high.gain.value = timbre.ampEQ.high;
 
   const postGain = ctx.createGain();
-  postGain.gain.value = distortionMakeupGain(timbre.distortionAmount);
+  postGain.gain.value = overdriveMakeupGain(timbre.distortionAmount);
 
   input.connect(preGain);
   preGain.connect(shaper);
   shaper.connect(low);
   low.connect(mid);
   mid.connect(high);
-
-  if (timbre.cabinetOn) {
-    const convolver = ctx.createConvolver();
-    convolver.buffer = getCabinetIR(ctx);
-    convolver.normalize = true;
-    high.connect(convolver);
-    convolver.connect(postGain);
-  } else {
-    high.connect(postGain);
-  }
+  high.connect(postGain);
 
   postGain.connect(masterGain);
   return input;

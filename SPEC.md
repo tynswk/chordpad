@@ -4,9 +4,9 @@
 
 ブラウザで動作するコードパッド楽器アプリ。キー/スケールを設定し、ダイアト
 ニックコード・ノンダイアトニックコードをパッドに配置してタップで鳴らせる。
-ピアノ/ギター（ディストーション・アンプEQ・キャビネット付き）の音色、BPM・
-ストロークパターンに対応し、コードの和声機能（トニック/サブドミナント/ド
-ミナント）を表示する。ライト/ダークテーマ切替、スマホ/タブレット対応、
+ピアノ/ギター（ソフトクリップのオーバードライブ・アンプEQ付き）の音色、
+BPM・ストロークパターンに対応し、コードの和声機能（トニック/サブドミナン
+ト/ドミナント）を表示する。ライト/ダークテーマ切替、スマホ/タブレット対応、
 GitHub Pagesでの公開に対応。
 
 - 実行環境: Webアプリ（React + TypeScript + Vite、Web Audio API）
@@ -17,7 +17,7 @@ GitHub Pagesでの公開に対応。
 | フェーズ | 内容 | 状態 |
 |---|---|---|
 | 1 | スケール設定・ダイアトニックコード自動生成・機能表示(T/SD/D)・パッド配置・ピアノ音 | ✅ 完了 |
-| 2 | ギター音色(歪み/アンプEQ/キャビ)・BPM&ストローク・ノンダイアトニックのコードビルダー | ✅ 完了 |
+| 2 | ギター音色(オーバードライブ/アンプEQ)・BPM&ストローク・ノンダイアトニックのコードビルダー | ✅ 完了 |
 | 3 | アルペジオ機能・セカンダリードミナント判定・進行アシスト機能 | 未着手 |
 | UI/UX | ライト/ダーク切替・カスタムドロップダウン・レスポンシブ対応 | ✅ 完了 |
 | デプロイ | GitHub Pages + Actions | 進行中 |
@@ -52,12 +52,11 @@ GitHub Pagesでの公開に対応。
   減衰させ、実際の弦のような自然なサステインを再現
   (`src/audio/karplusStrong.ts`, `public/audio-worklets/karplus-strong-processor.js`)
   - 減衰係数(damping)は周波数から自動算出（低音ほど長くサステイン）
-- 信号チェーン: Karplus-Strong Pluck → PreGain → WaveShaper(Distortion) →
-  Amp EQ(Low/Mid/High, BiquadFilterNode×3) → Cabinet IR(ConvolverNode,
-  ON/OFF可) → PostGain → Master
-  - ディストーション: `makeDistortionCurve()`（`src/audio/distortion.ts`）
-  - キャビネットIR: 外部ファイル不要で合成生成（`src/audio/cabinet.ts`）。
-    実IRファイルへの差し替えも容易な設計
+- 信号チェーン: Karplus-Strong Pluck → PreGain → WaveShaper(Overdrive) →
+  Amp EQ(Low/Mid/High, BiquadFilterNode×3) → PostGain → Master
+  - オーバードライブ: tanhによるソフトクリップ（`makeOverdriveCurve()`,
+    `src/audio/distortion.ts`）。フリーIRの再配布ライセンスが不明瞭だった
+    ため、キャビネットIRシミュレーション機能は削除済み
 
 ## 6. BPM & ストローク
 
@@ -100,9 +99,8 @@ interface ChordDef { root: NoteName; quality: ChordQuality; octave: number }
 // src/state/types.ts
 interface Timbre {
   type: "piano" | "guitar";
-  distortionAmount: number; // 0-100
+  distortionAmount: number; // 0-100 (Overdrive knob)
   ampEQ: { low: number; mid: number; high: number };
-  cabinetOn: boolean;
   masterVolume: number;
 }
 interface PlaybackSettings { bpm: number; mode: "block"|"strum"; strokePatternId: string }
