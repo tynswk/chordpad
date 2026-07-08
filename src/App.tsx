@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Guitar, KeyboardMusic, Moon, Pencil, Plus, Sun, X } from "lucide-react";
+import { Guitar, KeyboardMusic, Moon, Pencil, Plus, Sun, X } from "lucide-react";
 import "./App.css";
 import { playPad } from "./audio/engine";
 import { Select } from "./components/Select";
@@ -462,7 +462,6 @@ function App() {
               <span className="pad-panel-grip" />
               <span className="pad-panel-bar-row">
                 <span className="pad-panel-title">Pads</span>
-                {padsCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </span>
             </button>
             <section className={`pad-section pad-panel-body ${padsCollapsed ? "collapsed" : ""}`}>

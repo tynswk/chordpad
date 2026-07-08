@@ -42,7 +42,10 @@
     font-family: inherit;
     cursor: pointer;
     padding: 0;
-    touch-action: manipulation;
+    /* Must fully own vertical drags itself (swipe-to-open/close) -- with
+       "manipulation" the browser still claims the gesture for scrolling and
+       our pointerup handler never sees where the swipe ended. */
+    touch-action: none;
   }
 
   .pad-panel-grip {
@@ -72,10 +75,25 @@
 
   .pad-panel-body {
     max-height: min(60vh, 560px);
-    overflow-y: auto;
+    overflow: hidden;
     opacity: 1;
     transition: max-height 0.32s cubic-bezier(0.34, 1.2, 0.4, 1), opacity 0.22s ease, margin-top 0.32s ease;
     margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The 4x4 grid is sized to exactly fill the available height (rows as
+     fractions, no fixed aspect-ratio) so it never needs to scroll -- a
+     scrollbar here would look out of place inside a pad instrument. */
+  .pad-panel-body .pad-grid {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: repeat(4, 1fr);
+  }
+
+  .pad-panel-body .pad {
+    aspect-ratio: auto;
   }
 
   .pad-panel-body.collapsed {
@@ -131,9 +149,15 @@
     display: none;
   }
 
+  .layout-main .pad-panel {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
   .layout-main .pad-section {
     width: 100%;
-    max-width: 720px;
+    max-width: min(100%, 92vh, 1000px);
   }
 
   .layout-main .pad-grid {
@@ -176,7 +200,10 @@
   }
 
   .layout-main .pad-section {
-    max-width: none;
+    /* Square pads (aspect-ratio: 1) must stay bounded by the short
+       viewport's height too, or they'd overflow it trying to match the
+       generous available width. */
+    max-width: min(100%, 88vh);
   }
 }
 
@@ -781,6 +808,11 @@
   transition: none;
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.32);
   z-index: 5;
+  /* The pad follows the pointer via transform, so it's the topmost element
+     under the cursor at drop time -- without this, elementFromPoint() at
+     pointerup would hit the dragged pad itself instead of the slot it was
+     dropped on, and the reorder would always no-op. */
+  pointer-events: none;
 }
 
 /* Touch handling: avoid double-tap-zoom / 300ms delay on tappable controls,

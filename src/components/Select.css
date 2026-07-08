@@ -60,6 +60,29 @@
   border-radius: 16px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
   animation: cute-select-pop 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Scrollbar stays invisible until the list is actually scrolled/hovered,
+     so it doesn't sit there as a permanent visual element. */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.cute-select-menu:hover,
+.cute-select-menu:focus-within {
+  scrollbar-color: var(--border) transparent;
+}
+
+.cute-select-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cute-select-menu::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.cute-select-menu:hover::-webkit-scrollbar-thumb,
+.cute-select-menu:focus-within::-webkit-scrollbar-thumb {
+  background: var(--border);
 }
 
 @keyframes cute-select-pop {
