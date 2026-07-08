@@ -6,6 +6,8 @@
  * node that self-disconnects once the string has rung out.
  */
 
+import { registerVoice } from "./voiceRegistry";
+
 let workletModuleLoaded: Promise<void> | null = null;
 
 function loadWorkletModule(ctx: AudioContext): Promise<void> {
@@ -37,6 +39,7 @@ function dampingForFrequency(frequency: number): number {
 
 const VOICE_LIFETIME_MS = 12000;
 const FADE_OUT_MS = 120;
+const STEAL_FADE_MS = 25;
 
 /** Plucks a one-shot Karplus-Strong string voice, routed into `destination`. */
 export async function pluckKarplusString(
@@ -67,6 +70,16 @@ export async function pluckKarplusString(
   tone.connect(voiceGain);
   voiceGain.connect(destination);
 
+  let stopped = false;
+  let fadeTimeout: ReturnType<typeof setTimeout> | null = null;
+  let cleanupTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const disconnectAll = () => {
+    node.disconnect();
+    tone.disconnect();
+    voiceGain.disconnect();
+  };
+
   const delayMs = Math.max(0, (startTime - ctx.currentTime) * 1000);
   const fire = () => {
     node.port.postMessage({
@@ -81,16 +94,31 @@ export async function pluckKarplusString(
 
   // Fade out just before cleanup so a still-ringing low string doesn't click off.
   const fadeStart = delayMs + VOICE_LIFETIME_MS - FADE_OUT_MS;
-  setTimeout(() => {
+  fadeTimeout = setTimeout(() => {
     const t = ctx.currentTime;
     voiceGain.gain.setValueAtTime(voiceGain.gain.value, t);
     voiceGain.gain.linearRampToValueAtTime(0, t + FADE_OUT_MS / 1000);
   }, Math.max(0, fadeStart));
 
-  setTimeout(() => {
+  cleanupTimeout = setTimeout(() => {
+    stopped = true;
     node.port.postMessage({ type: "mute" });
-    node.disconnect();
-    tone.disconnect();
-    voiceGain.disconnect();
+    disconnectAll();
   }, delayMs + VOICE_LIFETIME_MS);
+
+  registerVoice({
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      if (fadeTimeout) clearTimeout(fadeTimeout);
+      if (cleanupTimeout) clearTimeout(cleanupTimeout);
+
+      const t = ctx.currentTime;
+      voiceGain.gain.cancelScheduledValues(t);
+      voiceGain.gain.setValueAtTime(voiceGain.gain.value, t);
+      voiceGain.gain.linearRampToValueAtTime(0, t + STEAL_FADE_MS / 1000);
+      node.port.postMessage({ type: "mute" });
+      setTimeout(disconnectAll, STEAL_FADE_MS + 20);
+    },
+  });
 }

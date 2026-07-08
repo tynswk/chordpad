@@ -2,9 +2,12 @@ import { createCabinetImpulseResponse } from "./cabinet";
 import { distortionMakeupGain, makeDistortionCurve } from "./distortion";
 import { pluckKarplusString, preloadKarplusStrongWorklet } from "./karplusStrong";
 import { voiceForGuitar, voiceForPiano } from "./voicing";
+import { registerVoice, stopAllVoices } from "./voiceRegistry";
 import type { PlaybackSettings, StrokePattern, Timbre } from "../state/types";
 import { STROKE_PRESETS } from "../state/types";
 import type { ChordDef } from "../music/theory";
+
+const STEAL_FADE_MS = 25;
 
 let audioContext: AudioContext | null = null;
 let cabinetIR: AudioBuffer | null = null;
@@ -130,6 +133,23 @@ function playNote(
 
   osc.start(startTime);
   osc.stop(startTime + releaseEnd + 0.05);
+
+  let stopped = false;
+  registerVoice({
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      const t = ctx.currentTime;
+      envelope.gain.cancelScheduledValues(t);
+      envelope.gain.setValueAtTime(envelope.gain.value, t);
+      envelope.gain.linearRampToValueAtTime(0.0001, t + STEAL_FADE_MS / 1000);
+      try {
+        osc.stop(t + STEAL_FADE_MS / 1000 + 0.01);
+      } catch {
+        // Already stopped/scheduled to stop; ignore.
+      }
+    },
+  });
 }
 
 /** Voices the chord appropriately for the instrument: real guitar-style
@@ -174,8 +194,10 @@ export function playChordStrum(
   }
 }
 
-/** Plays a pad according to the current playback mode (block or strum). */
+/** Plays a pad according to the current playback mode (block or strum). Cuts
+ * off whatever was still ringing from the previously played pad first. */
 export function playPad(chord: ChordDef, timbre: Timbre, playback: PlaybackSettings): void {
+  stopAllVoices();
   if (playback.mode === "strum") {
     playChordStrum(chord, timbre, playback);
   } else {
