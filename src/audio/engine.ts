@@ -159,9 +159,23 @@ export function playChordArpeggio(chord: ChordDef, timbre: Timbre, bpm: number):
   }
 }
 
-/** Plays a pad as a one-bar eighth-note arpeggio. Cuts off whatever was
- * still ringing from the previously played pad first. */
+/** Plays all voiced notes of the chord together, at once. */
+export function playChordBlock(chord: ChordDef, timbre: Timbre): void {
+  const ctx = getAudioContext();
+  const destination = buildTimbreChain(ctx, timbre);
+  const startTime = ctx.currentTime + 0.01;
+  for (const note of voiceChord(chord, timbre)) {
+    playNote(ctx, destination, midiToFrequency(note), startTime, timbre.type, 0.9);
+  }
+}
+
+/** Plays a pad using the current playback mode (arpeggio or all-at-once).
+ * Cuts off whatever was still ringing from the previously played pad first. */
 export function playPad(chord: ChordDef, timbre: Timbre, playback: PlaybackSettings): void {
   stopAllVoices();
-  playChordArpeggio(chord, timbre, playback.bpm);
+  if (playback.mode === "block") {
+    playChordBlock(chord, timbre);
+  } else {
+    playChordArpeggio(chord, timbre, playback.bpm);
+  }
 }

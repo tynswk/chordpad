@@ -20,7 +20,7 @@
 }
 
 .cute-select-trigger:hover {
-  box-shadow: 0 2px 8px rgba(170, 59, 255, 0.25);
+  box-shadow: 0 2px 8px rgba(47, 125, 225, 0.2);
 }
 
 .cute-select-trigger:active {
@@ -29,7 +29,7 @@
 
 .cute-select-trigger.open {
   border-color: var(--accent);
-  box-shadow: 0 2px 10px rgba(170, 59, 255, 0.3);
+  box-shadow: 0 2px 10px rgba(47, 125, 225, 0.25);
 }
 
 .cute-select-trigger .chevron {
@@ -53,8 +53,10 @@
   margin: 0;
   padding: 6px;
   list-style: none;
-  background: var(--bg);
-  border: 1.5px solid var(--accent-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1.5px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
   animation: cute-select-pop 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -88,6 +90,6 @@
 }
 
 .cute-select-option.selected {
-  background: linear-gradient(135deg, var(--accent), #ff8fd6);
+  background: var(--accent);
   color: #fff;
 }

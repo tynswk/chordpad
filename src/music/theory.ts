@@ -18,7 +18,9 @@ export type ChordQuality =
   | "m7"
   | "m7b5"
   | "6"
-  | "add9";
+  | "m6"
+  | "add9"
+  | "blk";
 
 export type ChordFunction =
   | "tonic"
@@ -127,7 +129,10 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   m7: [0, 3, 7, 10],
   m7b5: [0, 3, 6, 10],
   "6": [0, 4, 7, 9],
+  m6: [0, 3, 7, 9],
   add9: [0, 4, 7, 14],
+  // Blackadder chord ("イキスギコード"): root, #11, b7, 9 (3rd/5th omitted).
+  blk: [0, 6, 10, 14],
 };
 
 export function chordToMidiNotes(chord: ChordDef): number[] {
@@ -187,10 +192,7 @@ export function getChordFunctionDetail(chord: ChordDef, scale: ScaleConfig): Cho
     (d) => d.chord.root === chord.root && qualitiesMatch(d.chord.quality, chord.quality),
   );
   if (borrowedMatch) {
-    return {
-      function: "borrowed",
-      detail: scale.type === "major" ? "同主短調から借用" : "同主長調から借用",
-    };
+    return { function: "borrowed" };
   }
 
   return { function: "nonDiatonic" };
@@ -211,7 +213,7 @@ export const FUNCTION_LABELS: Record<ChordFunction, string> = {
 
 export const CHORD_QUALITIES: ChordQuality[] = [
   "major", "minor", "dim", "aug", "sus2", "sus4",
-  "7", "maj7", "m7", "m7b5", "6", "add9",
+  "7", "maj7", "m7", "m7b5", "6", "m6", "add9", "blk",
 ];
 
 export const CHORD_QUALITY_SUFFIX: Record<ChordQuality, string> = {
@@ -226,7 +228,9 @@ export const CHORD_QUALITY_SUFFIX: Record<ChordQuality, string> = {
   m7: "m7",
   m7b5: "m7b5",
   "6": "6",
+  m6: "m6",
   add9: "add9",
+  blk: "(blk)",
 };
 
 export function chordLabel(chord: ChordDef): string {

@@ -42,7 +42,8 @@ BPMに合わせた1小節分の8分音符アルペジオで再生し、コード
 2. **セカンダリードミナント**: ルートの完全5度下にダイアトニックコードが
    あるMajor/7thコード。バッジに `V/ii` のように解決先の度数を表示
 3. **借用和音（モーダルインターチェンジ）**: 同主長調/短調のダイアトニッ
-   クコードと一致するコード。バッジに「借用」と表示
+   クコードと一致するコード。バッジは固定で「借用」（詳細説明文は付けず、
+   バッジサイズが一定になるようにしている）
 4. どれにも該当しなければ非該当「—」
 
 ## 5. コード配置
@@ -58,10 +59,14 @@ BPMに合わせた1小節分の8分音符アルペジオで再生し、コード
 
 ### パッド編集（並べ替え）
 
-- 「編集」ボタンでパッドグリッドが編集モードに入り、既存パッドがiOSのホ
-  ーム画面のようにプルプル揺れる
+- 編集アイコン（鉛筆）ボタンでパッドグリッドが編集モードに入り、既存パッ
+  ドがiOSのホーム画面のようにプルプル揺れる。「×」削除ボタンと「Clear
+  All」も編集モード中のみ表示される（通常時は隠す）
 - 編集モード中はパッドをポインター（マウス/タッチ両対応、Pointer Events
-  使用）でつかんでドラッグすると、他のパッドとリアルタイムに入れ替わる
+  使用）でつかむと手前に浮き上がり、グリッドにスナップせずポインターに
+  追従して自由に動く（`transform: translate()`のみで見た目上移動、配列
+  の並べ替えはドラッグ中は行わない）。指を離した位置の下にあるスロット
+  へその場でスナップして収まる
 - 各パッドは表示位置と独立した安定な`key`を持ち、ドラッグ中の追跡はこの
   `key`で行う（表示位置のインデックスを識別子に使うと、入れ替え中に基準
   がずれるバグがあったため分離した）
@@ -93,13 +98,14 @@ BPMに合わせた1小節分の8分音符アルペジオで再生し、コード
   シレーター/ギターのKarplus-Strongプラック）を即座にフェードアウトして
   停止する（`src/audio/voiceRegistry.ts`）。コードが重なって鳴り続けるこ
   とはない
-- Piano/Guitarの切替ボタンは絵文字のみ（🎹/🎸）
+- Piano/Guitarの切替ボタンは`lucide-react`のアイコン（KeyboardMusic/Guitar）
 
-## 7. 再生（アルペジオ）
+## 7. 再生（アルペジオ / ストローク）
 
-- ストローク機能は廃止。パッドをタップすると常に**1小節・8分音符×8ステ
-  ップの上行アルペジオ**で再生される（コード構成音を音数分ループしなが
-  ら8ステップ埋める）(`playChordArpeggio()`, `src/audio/engine.ts`)
+- 再生モードを2択で選択可能:「アルペジオ」= 1小節・8分音符×8ステップの
+  上行アルペジオ（コード構成音を音数分ループしながら8ステップ埋める、
+  `playChordArpeggio()`）／「ストローク」= コード構成音を全て同時に鳴らす
+  だけ（パターンなし、`playChordBlock()`）(`src/audio/engine.ts`)
 - BPM設定: `−`/`+`ボタン付きの数値ステッパー（直接入力も可）＋タップテン
   ポボタン（直近最大6タップの平均間隔から算出、2秒以上間が空いたらリセッ
   ト）。範囲は40〜240 (`MIN_BPM`/`MAX_BPM`, `src/state/types.ts`)
@@ -107,21 +113,36 @@ BPMに合わせた1小節分の8分音符アルペジオで再生し、コード
 ## 8. UI
 
 - カスタムドロップダウン(`src/components/Select.tsx`)でOSネイティブの
-  `<select>`見た目を排除し、丸ボタン＋ふわっと開くカード型メニューに統一
-- トグルスイッチ、pill型ボタン、ノブ風の縦スライダーなど一貫した可愛らし
-  いデザイン
+  `<select>`見た目を排除し、丸ボタン＋すりガラス（`backdrop-filter: blur`）
+  のカード型メニューに統一
+- 配色は青系（`--accent`等、`src/index.css`）。ボタンやアクティブ状態の
+  グラデーション装飾は使わずフラットカラーで統一（AIっぽい安っぽさを避け
+  る意図、詳細は `../CLAUDE.md` のUI/UXデザイン方針を参照）
+- アイコンはUnicode絵文字ではなく`lucide-react`（フリー/オープンソースの
+  アイコンライブラリ）を使用
+- Piano/Guitar・アルペジオ/ストロークの切替は、選択中の項目にスライドす
+  る背景ピル（`.instrument-switch-indicator`）でアニメーション表示
+- トグルスイッチ、pill型ボタン、ノブ風の縦スライダーなど一貫したデザイン
 - ライト/ダークテーマ切替ボタン（`localStorage`に保存、未設定時はOS設定
-  に従う）
+  に従う）。テーマ切替時は`<meta name="theme-color">`も同期させ、iOSの
+  ステータスバー色を背景色と揃える
 - フォント: Inter（英数字）+ Noto Sans JP（日本語）をGoogle Fontsから読込
+- 説明的なキャプション文（「〜できます」等）は極力置かず、見た目から動作
+  が分かるUIを優先
 - レスポンシブ対応: スマホ(〜480px)・タブレット・PCで表示確認済み。700px
   以上ではサイドバー(コントロール)＋パッド盤面の2カラムレイアウトで画面
-  を広く使う。タップ操作向けに`touch-action: manipulation`、ダブルタップ
-  ズーム防止のviewport設定を追加
+  を広く使う。高さの低い横向き画面（`max-height:500px`）ではサイドバー幅
+  を縮め、パッド側に余白を回す専用調整あり。タップ操作向けに
+  `touch-action: manipulation`、ダブルタップズーム防止のviewport設定を追加
+- iOS/iPadOSのノッチ・ステータスバーとの重なりを避けるため
+  `env(safe-area-inset-*)`を`.app`のパディングに反映
 - 699px以下（縦画面スマホなど）ではPadパネルを画面下部に**常時最前面固定
   表示**し、コントロール類をスクロールしてもPadを探す必要がないようにし
-  た。パネル上部のバー（グリップ＋「しまう/ひらく」ボタン）をタップする
-  と、`max-height`のトランジションでスライド＋フェードしながら開閉する
-  (`.pad-panel`, `src/App.css`)
+  た。パネル上部のバー（グリップ＋開閉シェブロンアイコン、テキストラベル
+  なし）はタップでも上下スワイプでも開閉でき、`max-height`のトランジショ
+  ンでスライド＋フェードする(`.pad-panel`, `src/App.css`)。展開時にサイド
+  バー側の一番下の設定までスクロールで到達できるよう、サイドバーの下部
+  余白をパネルの最大展開高さ分確保している
 
 ## 9. デプロイ
 
@@ -136,7 +157,8 @@ BPMに合わせた1小節分の8分音符アルペジオで再生し、コード
 ```ts
 // src/music/theory.ts
 type ScaleType = "major" | "minor";
-type ChordQuality = "major"|"minor"|"dim"|"aug"|"sus2"|"sus4"|"7"|"maj7"|"m7"|"m7b5"|"6"|"add9";
+type ChordQuality = "major"|"minor"|"dim"|"aug"|"sus2"|"sus4"|"7"|"maj7"|"m7"|"m7b5"|"6"|"m6"|"add9"|"blk";
+// "blk" = Blackadder chord（イキスギコード）: root, #11, b7, 9（3rd/5th省略）
 type ChordFunction = "tonic"|"subdominant"|"dominant"|"secondaryDominant"|"borrowed"|"nonDiatonic";
 interface ChordFunctionResult { function: ChordFunction; detail?: string } // detail: "V/ii" など
 interface ChordDef { root: NoteName; quality: ChordQuality; octave: number }
@@ -148,7 +170,7 @@ interface Timbre {
   ampEQ: { low: number; mid: number; high: number };
   masterVolume: number;
 }
-interface PlaybackSettings { bpm: number }
+interface PlaybackSettings { bpm: number; mode: "arpeggio" | "block" }
 
 // src/App.tsx
 type PadSource = { kind: "diatonic"; degree: number } | { kind: "custom"; chord: ChordDef };

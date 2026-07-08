@@ -17,10 +17,14 @@ export const DEFAULT_TIMBRE: Timbre = {
 export const MIN_BPM = 40;
 export const MAX_BPM = 240;
 
+export type PlayMode = "arpeggio" | "block";
+
 export interface PlaybackSettings {
   bpm: number;
+  mode: PlayMode;
 }
 
 export const DEFAULT_PLAYBACK: PlaybackSettings = {
   bpm: 120,
+  mode: "arpeggio",
 };
