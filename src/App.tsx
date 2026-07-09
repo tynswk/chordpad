@@ -162,6 +162,8 @@ function App() {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [flyingChips, setFlyingChips] = useState<FlyingChip[]>([]);
   const [padsCollapsed, setPadsCollapsed] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const clearAllRef = useRef<HTMLDivElement>(null);
   const [panelDrag, setPanelDrag] = useState<{
     pointerId: number;
     startY: number;
@@ -232,7 +234,19 @@ function App() {
 
   function clearAllPads() {
     setPads(createEmptyPads(gridSize.cols * gridSize.rows));
+    setConfirmClearAll(false);
   }
+
+  useEffect(() => {
+    if (!confirmClearAll) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (clearAllRef.current && !clearAllRef.current.contains(e.target as Node)) {
+        setConfirmClearAll(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [confirmClearAll]);
 
   function adjustBpm(delta: number) {
     setPlayback((p) => ({ ...p, bpm: clampBpm(p.bpm + delta) }));
@@ -617,9 +631,19 @@ function App() {
                 />
                 <div className="pad-section-actions">
                   {editMode && (
-                    <button className="clear-all" onClick={clearAllPads}>
-                      Clear All
-                    </button>
+                    <div className="clear-all-wrap" ref={clearAllRef}>
+                      <button className="clear-all" onClick={() => setConfirmClearAll((v) => !v)}>
+                        Clear All
+                      </button>
+                      {confirmClearAll && (
+                        <div className="clear-all-confirm" role="dialog">
+                          <span>本当に消しますか？</span>
+                          <button className="clear-all-confirm-btn" onClick={clearAllPads}>
+                            削除する
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                   <button
                     className={`edit-toggle ${editMode ? "active" : ""}`}
