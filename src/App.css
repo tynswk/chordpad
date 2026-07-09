@@ -111,13 +111,9 @@
   }
 
   /* No drag-handle grip needed once the panel isn't a collapsible bottom
-     sheet anymore -- but the title + grid-size/edit controls stay visible. */
-  .pad-panel-grip {
+     sheet anymore -- but the grid-size/edit controls stay visible. */
+  .pad-panel-grip-row {
     display: none;
-  }
-
-  .pad-panel-tap-zone {
-    cursor: default;
   }
 
   .layout-main .pad-panel {
@@ -403,23 +399,23 @@
 
 .pad-panel-bar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
   margin-bottom: 12px;
 }
 
-.pad-panel-tap-zone {
+.pad-panel-grip-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  padding: 4px 0;
   cursor: pointer;
 }
 
-.pad-panel-title {
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--text-h);
+.pad-panel-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .clear-all {
@@ -494,6 +490,9 @@
   right: 6px;
   width: 20px;
   height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   border: none;
   border-radius: 50%;
@@ -748,9 +747,12 @@
 }
 
 .edit-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 12px;
   font-weight: 600;
-  padding: 6px 16px;
+  padding: 8px;
   cursor: pointer;
   border: 1.5px solid var(--border);
   border-radius: 999px;
@@ -791,17 +793,48 @@
   animation-delay: -0.11s;
 }
 
-.pad.dragging {
+/* The origin slot of the pad currently being dragged: rendered as a plain
+   empty placeholder so it's clear that's where the pad came from, while the
+   actual pad content floats separately (see .floating-drag). */
+.pad.drag-origin {
   animation: none;
-  cursor: grabbing;
-  transition: none;
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.32);
-  z-index: 5;
-  /* The pad follows the pointer via transform, so it's the topmost element
-     under the cursor at drop time -- without this, elementFromPoint() at
-     pointerup would hit the dragged pad itself instead of the slot it was
-     dropped on, and the reorder would always no-op. */
+}
+
+/* The slot currently under the pointer while dragging -- a live preview of
+   where the pad will land if released now. Its normal border is replaced
+   with a stronger highlight rather than layering on top of it. */
+.pad.drop-target {
+  border-style: solid;
+  border-color: var(--accent);
+  border-width: 2px;
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+/* The pad being dragged: lifted out of the grid flow entirely and
+   positioned to follow the pointer 1:1 (no CSS transition -- that would lag
+   behind a finger). */
+.floating-drag {
+  position: fixed;
   pointer-events: none;
+  z-index: 60;
+  cursor: grabbing;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.32);
+  transition: none;
+}
+
+/* A chord flying from the palette/builder "+" button into its new pad. */
+.flying-chip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 80;
+  opacity: 1;
+  transition: left 0.32s cubic-bezier(0.34, 1.2, 0.4, 1), top 0.32s cubic-bezier(0.34, 1.2, 0.4, 1),
+    width 0.32s cubic-bezier(0.34, 1.2, 0.4, 1), height 0.32s cubic-bezier(0.34, 1.2, 0.4, 1),
+    opacity 0.25s ease 0.15s;
+}
+
+.flying-chip.landed {
+  opacity: 0;
 }
 
 /* Touch handling: avoid double-tap-zoom / 300ms delay on tappable controls,

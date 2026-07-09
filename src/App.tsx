@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Guitar, KeyboardMusic, Moon, Pencil, Plus, Sun, X } from "lucide-react";
+import { Check, Guitar, KeyboardMusic, Moon, Pencil, Plus, Sun, X } from "lucide-react";
 import "./App.css";
 import { playPad } from "./audio/engine";
 import { Select } from "./components/Select";
@@ -68,9 +68,42 @@ interface DragState {
   startY: number;
   dx: number;
   dy: number;
+  originRect: { left: number; top: number; width: number; height: number };
+  overIndex: number | null;
+}
+
+interface FlyingChip {
+  id: number;
+  chord: ChordDef;
+  func: ResolvedPad["function"];
+  detail?: string;
+  startRect: { left: number; top: number; width: number; height: number };
+  endRect: { left: number; top: number; width: number; height: number };
+}
+
+function FlyingChipView({ chip }: { chip: FlyingChip }) {
+  const [landed, setLanded] = useState(false);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setLanded(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const rect = landed ? chip.endRect : chip.startRect;
+
+  return (
+    <div
+      className={`pad flying-chip function-${chip.func} ${landed ? "landed" : ""}`}
+      style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+    >
+      <span className="chord-name">{chordLabel(chip.chord)}</span>
+      <span className="function-badge">{chip.detail ?? FUNCTION_LABELS[chip.func]}</span>
+    </div>
+  );
 }
 
 let padKeySeq = 0;
+let flyingChipSeq = 0;
 
 function createEmptyPads(count: number): PadState[] {
   return Array.from({ length: count }, () => ({ key: padKeySeq++, source: null }));
@@ -127,6 +160,7 @@ function App() {
   const [builderQuality, setBuilderQuality] = useState<ChordQuality>("major");
   const [editMode, setEditMode] = useState(false);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [flyingChips, setFlyingChips] = useState<FlyingChip[]>([]);
   const [padsCollapsed, setPadsCollapsed] = useState(false);
   const [panelDrag, setPanelDrag] = useState<{
     pointerId: number;
@@ -160,14 +194,36 @@ function App() {
     playPad(chord, timbre, playback);
   }
 
-  function assignToNextEmptyPad(source: PadSource) {
+  function assignToNextEmptyPad(source: PadSource, originEl?: HTMLElement) {
+    const index = pads.findIndex((pad) => pad.source === null);
+    if (index === -1) return;
     setPads((prev) => {
-      const index = prev.findIndex((pad) => pad.source === null);
-      if (index === -1) return prev;
       const next = [...prev];
       next[index] = { ...next[index], source };
       return next;
     });
+
+    if (!originEl) return;
+    const targetEl = document.querySelector<HTMLElement>(`[data-pad-index="${index}"]`);
+    if (!targetEl) return;
+    const endRect = targetEl.getBoundingClientRect();
+    if (endRect.width === 0) return; // pad panel is collapsed/hidden -- nothing to fly to
+    const resolved = resolvePadSource(source, diatonicChords, scale);
+    if (!resolved) return;
+    const startRect = originEl.getBoundingClientRect();
+    const id = ++flyingChipSeq;
+    setFlyingChips((chips) => [
+      ...chips,
+      {
+        id,
+        chord: resolved.chord,
+        func: resolved.function,
+        detail: resolved.detail,
+        startRect: { left: startRect.left, top: startRect.top, width: startRect.width, height: startRect.height },
+        endRect: { left: endRect.left, top: endRect.top, width: endRect.width, height: endRect.height },
+      },
+    ]);
+    setTimeout(() => setFlyingChips((chips) => chips.filter((c) => c.id !== id)), 420);
   }
 
   function clearPad(key: number) {
@@ -252,29 +308,40 @@ function App() {
   }, [panelDrag === null]);
 
   // Pads float freely under the pointer while dragging (no live grid-swap);
-  // on release we figure out which slot it was dropped on and reorder then.
+  // the slot currently under the pointer is tracked as a drop-target preview,
+  // and on release the dragged pad and that slot simply swap contents --
+  // nothing else in the grid shifts around.
   useEffect(() => {
     if (drag === null) return;
     const { pointerId } = drag;
 
     function handleMove(e: PointerEvent) {
       if (e.pointerId !== pointerId) return;
-      setDrag((prev) => (prev ? { ...prev, dx: e.clientX - prev.startX, dy: e.clientY - prev.startY } : prev));
+      const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const padEl = el?.closest<HTMLElement>("[data-pad-index]");
+      const overIndex = padEl ? Number(padEl.dataset.padIndex) : null;
+      setDrag((prev) =>
+        prev
+          ? {
+              ...prev,
+              dx: e.clientX - prev.startX,
+              dy: e.clientY - prev.startY,
+              overIndex: overIndex === null || Number.isNaN(overIndex) ? prev.overIndex : overIndex,
+            }
+          : prev,
+      );
     }
 
     function handleUp(e: PointerEvent) {
       if (e.pointerId !== pointerId) return;
-      const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-      const padEl = el?.closest<HTMLElement>("[data-pad-index]");
-      const overIndex = padEl ? Number(padEl.dataset.padIndex) : NaN;
       setDrag((prev) => {
-        if (prev && !Number.isNaN(overIndex)) {
+        if (prev && prev.overIndex !== null) {
+          const toIndex = prev.overIndex;
           setPads((prevPads) => {
             const fromIndex = prevPads.findIndex((p) => p.key === prev.key);
-            if (fromIndex === -1 || fromIndex === overIndex) return prevPads;
+            if (fromIndex === -1 || fromIndex === toIndex || toIndex >= prevPads.length) return prevPads;
             const next = [...prevPads];
-            const [moved] = next.splice(fromIndex, 1);
-            next.splice(overIndex, 0, moved);
+            [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
             return next;
           });
         }
@@ -378,7 +445,7 @@ function App() {
                   </button>
                   <button
                     className="add-to-pad"
-                    onClick={() => assignToNextEmptyPad({ kind: "diatonic", degree: dc.degree })}
+                    onClick={(e) => assignToNextEmptyPad({ kind: "diatonic", degree: dc.degree }, e.currentTarget)}
                     title="Add to pad"
                   >
                     <Plus size={16} />
@@ -406,7 +473,7 @@ function App() {
               </button>
               <button
                 className="add-to-pad builder-add"
-                onClick={() => assignToNextEmptyPad({ kind: "custom", chord: builderChord })}
+                onClick={(e) => assignToNextEmptyPad({ kind: "custom", chord: builderChord }, e.currentTarget)}
               >
                 <Plus size={16} />
               </button>
@@ -530,7 +597,7 @@ function App() {
           <div className="pad-panel">
             <div className="pad-panel-bar">
               <div
-                className="pad-panel-tap-zone"
+                className="pad-panel-grip-row"
                 onPointerDown={handlePanelBarPointerDown}
                 role="button"
                 tabIndex={0}
@@ -538,9 +605,8 @@ function App() {
                 aria-label={padsCollapsed ? "パッドを開く" : "パッドを閉じる"}
               >
                 <span className="pad-panel-grip" />
-                <span className="pad-panel-title">Pads</span>
               </div>
-              <div className="pad-section-actions">
+              <div className="pad-panel-controls-row">
                 <Select
                   value={gridSizeLabel(gridSize)}
                   onChange={(v) => {
@@ -549,13 +615,20 @@ function App() {
                   }}
                   options={GRID_PRESETS.map((p) => ({ value: gridSizeLabel(p), label: gridSizeLabel(p) }))}
                 />
-                <button
-                  className={`edit-toggle ${editMode ? "active" : ""}`}
-                  onClick={() => setEditMode((e) => !e)}
-                  aria-label={editMode ? "編集完了" : "パッドを編集"}
-                >
-                  {editMode ? "完了" : <Pencil size={14} />}
-                </button>
+                <div className="pad-section-actions">
+                  {editMode && (
+                    <button className="clear-all" onClick={clearAllPads}>
+                      Clear All
+                    </button>
+                  )}
+                  <button
+                    className={`edit-toggle ${editMode ? "active" : ""}`}
+                    onClick={() => setEditMode((e) => !e)}
+                    aria-label={editMode ? "編集完了" : "パッドを編集"}
+                  >
+                    {editMode ? <Check size={14} /> : <Pencil size={14} />}
+                  </button>
+                </div>
               </div>
             </div>
             <section
@@ -577,13 +650,6 @@ function App() {
                   : undefined
               }
             >
-              {editMode && (
-                <div className="pad-section-header">
-                  <button className="clear-all" onClick={clearAllPads}>
-                    Clear All
-                  </button>
-                </div>
-              )}
               <div
                 className="pad-grid"
                 style={{ gridTemplateColumns: `repeat(${gridSize.cols}, 1fr)`, gridTemplateRows: `repeat(${gridSize.rows}, 1fr)` }}
@@ -591,18 +657,28 @@ function App() {
                 {pads.map((pad, index) => {
                   const resolved = pad.source ? resolvePadSource(pad.source, diatonicChords, scale) : null;
                   const isDragging = drag?.key === pad.key;
+                  const isDropTarget = drag !== null && !isDragging && drag.overIndex === index;
+
+                  // The pad being dragged is lifted out of the grid entirely
+                  // (rendered as a floating overlay below) and its slot shows
+                  // a plain empty placeholder, so it's obvious where it came
+                  // from and only the two swapped slots ever visually change.
+                  if (isDragging) {
+                    return <div key={pad.key} data-pad-index={index} className="pad empty drag-origin" />;
+                  }
+
                   return (
                     <div
                       key={pad.key}
                       data-pad-index={index}
                       className={`pad ${resolved ? `function-${resolved.function}` : "empty"} ${
-                        editMode && resolved && !isDragging ? "jiggle" : ""
-                      } ${isDragging ? "dragging" : ""}`}
-                      style={isDragging ? { transform: `translate(${drag.dx}px, ${drag.dy}px) scale(1.08)` } : undefined}
+                        editMode && resolved ? "jiggle" : ""
+                      } ${isDropTarget ? "drop-target" : ""}`}
                       onClick={() => !editMode && resolved && playChord(resolved.chord)}
                       onPointerDown={(e) => {
                         if (!editMode || !resolved) return;
                         e.preventDefault();
+                        const rect = e.currentTarget.getBoundingClientRect();
                         setDrag({
                           key: pad.key,
                           pointerId: e.pointerId,
@@ -610,6 +686,8 @@ function App() {
                           startY: e.clientY,
                           dx: 0,
                           dy: 0,
+                          originRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+                          overIndex: index,
                         });
                       }}
                     >
@@ -637,10 +715,38 @@ function App() {
                   );
                 })}
               </div>
+              {drag &&
+                (() => {
+                  const draggedPad = pads.find((p) => p.key === drag.key);
+                  const resolved = draggedPad?.source
+                    ? resolvePadSource(draggedPad.source, diatonicChords, scale)
+                    : null;
+                  if (!resolved) return null;
+                  return (
+                    <div
+                      className={`pad floating-drag function-${resolved.function}`}
+                      style={{
+                        left: drag.originRect.left,
+                        top: drag.originRect.top,
+                        width: drag.originRect.width,
+                        height: drag.originRect.height,
+                        transform: `translate(${drag.dx}px, ${drag.dy}px) scale(1.08)`,
+                      }}
+                    >
+                      <span className="chord-name">{chordLabel(resolved.chord)}</span>
+                      <span className="function-badge">
+                        {resolved.detail ?? FUNCTION_LABELS[resolved.function]}
+                      </span>
+                    </div>
+                  );
+                })()}
             </section>
           </div>
         </div>
       </div>
+      {flyingChips.map((chip) => (
+        <FlyingChipView key={chip.id} chip={chip} />
+      ))}
     </div>
   );
 }
