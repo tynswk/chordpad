@@ -13,13 +13,29 @@ interface SelectProps<T extends string> {
   className?: string;
 }
 
+const MENU_MAX_HEIGHT = 240;
+const MENU_GAP = 8;
+
 export function Select<T extends string>({ value, options, onChange, className }: SelectProps<T>) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
 
   useEffect(() => {
     if (!open) return;
+
+    // Pick whichever side (above/below the trigger) actually has room for
+    // the menu, falling back to whichever side has more space if neither
+    // fully fits.
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const needed = MENU_MAX_HEIGHT + MENU_GAP;
+      setOpenUpward(spaceBelow < needed && spaceAbove > spaceBelow);
+    }
+
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -49,7 +65,7 @@ export function Select<T extends string>({ value, options, onChange, className }
         </svg>
       </button>
       {open && (
-        <ul className="cute-select-menu" role="listbox">
+        <ul className={`cute-select-menu ${openUpward ? "upward" : ""}`} role="listbox">
           {options.map((opt) => (
             <li
               key={opt.value}

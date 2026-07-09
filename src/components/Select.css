@@ -66,6 +66,27 @@
   scrollbar-color: transparent transparent;
 }
 
+/* Flips above the trigger when there isn't enough room below (see Select.tsx). */
+.cute-select-menu.upward {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+.cute-select-menu.upward {
+  animation-name: cute-select-pop-upward;
+}
+
+@keyframes cute-select-pop-upward {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .cute-select-menu:hover,
 .cute-select-menu:focus-within {
   scrollbar-color: var(--border) transparent;
