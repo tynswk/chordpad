@@ -455,9 +455,8 @@
   z-index: 30;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 16px;
+  border-radius: 18px;
   white-space: nowrap;
   font-size: 13px;
   font-weight: 600;

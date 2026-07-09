@@ -637,9 +637,8 @@ function App() {
                       </button>
                       {confirmClearAll && (
                         <div className="clear-all-confirm" role="dialog">
-                          <span>本当に消しますか？</span>
                           <button className="clear-all-confirm-btn" onClick={clearAllPads}>
-                            削除する
+                            Clear All
                           </button>
                         </div>
                       )}
